@@ -1,0 +1,1 @@
+/usr/bin/c++     CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o  -o ss2pl.exe /usr/lib/x86_64-linux-gnu/libgflags.so -lpthread 

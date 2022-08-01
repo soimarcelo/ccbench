@@ -18,14 +18,17 @@ extern void display_procedure_vector(std::vector<Procedure> &pro);
 /**
  * @brief Search xxx set
  * @detail Search element of local set corresponding to given key.
- * In this prototype system, the value to be updated for each worker thread 
+ * In this prototype system, the value to be updated for each worker thread
  * is fixed for high performance, so it is only necessary to check the key match.
  * @param Key [in] the key of key-value
  * @return Corresponding element of local set
  */
-inline SetElement<Tuple> *TxExecutor::searchReadSet(uint64_t key) {
-  for (auto itr = read_set_.begin(); itr != read_set_.end(); ++itr) {
-    if ((*itr).key_ == key) return &(*itr);
+inline SetElement<Tuple> *TxExecutor::searchReadSet(uint64_t key)
+{
+  for (auto itr = read_set_.begin(); itr != read_set_.end(); ++itr)
+  {
+    if ((*itr).key_ == key)
+      return &(*itr);
   }
 
   return nullptr;
@@ -34,14 +37,17 @@ inline SetElement<Tuple> *TxExecutor::searchReadSet(uint64_t key) {
 /**
  * @brief Search xxx set
  * @detail Search element of local set corresponding to given key.
- * In this prototype system, the value to be updated for each worker thread 
+ * In this prototype system, the value to be updated for each worker thread
  * is fixed for high performance, so it is only necessary to check the key match.
  * @param Key [in] the key of key-value
  * @return Corresponding element of local set
  */
-inline SetElement<Tuple> *TxExecutor::searchWriteSet(uint64_t key) {
-  for (auto itr = write_set_.begin(); itr != write_set_.end(); ++itr) {
-    if ((*itr).key_ == key) return &(*itr);
+inline SetElement<Tuple> *TxExecutor::searchWriteSet(uint64_t key)
+{
+  for (auto itr = write_set_.begin(); itr != write_set_.end(); ++itr)
+  {
+    if ((*itr).key_ == key)
+      return &(*itr);
   }
 
   return nullptr;
@@ -53,7 +59,8 @@ inline SetElement<Tuple> *TxExecutor::searchWriteSet(uint64_t key) {
  * Release locks.
  * @return void
  */
-void TxExecutor::abort() {
+void TxExecutor::abort()
+{
   /**
    * Release locks
    */
@@ -85,8 +92,10 @@ void TxExecutor::abort() {
  * @brief success termination of transaction.
  * @return void
  */
-void TxExecutor::commit() {
-  for (auto itr = write_set_.begin(); itr != write_set_.end(); ++itr) {
+void TxExecutor::commit()
+{
+  for (auto itr = write_set_.begin(); itr != write_set_.end(); ++itr)
+  {
     /**
      * update payload.
      */
@@ -116,15 +125,17 @@ void TxExecutor::begin() { this->status_ = TransactionStatus::inFlight; }
  * @brief Transaction read function.
  * @param [in] key The key of key-value
  */
-void TxExecutor::read(uint64_t key) {
+void TxExecutor::read(uint64_t key)
+{
 #if ADD_ANALYSIS
   uint64_t start = rdtscp();
-#endif  // ADD_ANALYSIS
+#endif // ADD_ANALYSIS
 
   /**
    * read-own-writes or re-read from local read set.
    */
-  if (searchWriteSet(key) || searchReadSet(key)) goto FINISH_READ;
+  if (searchWriteSet(key) || searchReadSet(key))
+    goto FINISH_READ;
 
   /**
    * Search tuple from data structure.
@@ -147,10 +158,13 @@ void TxExecutor::read(uint64_t key) {
   r_lock_list_.emplace_back(&tuple->lock_);
   read_set_.emplace_back(key, tuple, tuple->val_);
 #elif defined(DLR1)
-  if (tuple->lock_.r_trylock()) {
+  if (tuple->lock_.r_trylock())
+  {
     r_lock_list_.emplace_back(&tuple->lock_);
     read_set_.emplace_back(key, tuple, tuple->val_);
-  } else {
+  }
+  else
+  {
     /**
      * No-wait and abort.
      */
@@ -172,20 +186,25 @@ FINISH_READ:
  * @param [in] key The key of key-value
  * @return void
  */
-void TxExecutor::write(uint64_t key) {
+void TxExecutor::write(uint64_t key)
+{
 #if ADD_ANALYSIS
   uint64_t start = rdtscp();
 #endif
 
   // if it already wrote the key object once.
-  if (searchWriteSet(key)) goto FINISH_WRITE;
+  if (searchWriteSet(key))
+    goto FINISH_WRITE;
 
-  for (auto rItr = read_set_.begin(); rItr != read_set_.end(); ++rItr) {
-    if ((*rItr).key_ == key) {  // hit
+  for (auto rItr = read_set_.begin(); rItr != read_set_.end(); ++rItr)
+  {
+    if ((*rItr).key_ == key)
+    { // hit
 #if DLR0
       (*rItr).rcdptr_->lock_.upgrade();
 #elif defined(DLR1)
-      if (!(*rItr).rcdptr_->lock_.tryupgrade()) {
+      if (!(*rItr).rcdptr_->lock_.tryupgrade())
+      {
         this->status_ = TransactionStatus::aborted;
         goto FINISH_WRITE;
       }
@@ -194,8 +213,10 @@ void TxExecutor::write(uint64_t key) {
       // upgrade success
       // remove old element of read lock list.
       for (auto lItr = r_lock_list_.begin(); lItr != r_lock_list_.end();
-           ++lItr) {
-        if (*lItr == &((*rItr).rcdptr_->lock_)) {
+           ++lItr)
+      {
+        if (*lItr == &((*rItr).rcdptr_->lock_))
+        {
           write_set_.emplace_back(key, (*rItr).rcdptr_);
           w_lock_list_.emplace_back(&(*rItr).rcdptr_->lock_);
           r_lock_list_.erase(lItr);
@@ -227,7 +248,8 @@ void TxExecutor::write(uint64_t key) {
    */
   tuple->lock_.w_lock();
 #elif defined(DLR1)
-  if (!tuple->lock_.w_trylock()) {
+  if (!tuple->lock_.w_trylock())
+  {
     /**
      * No-wait and abort.
      */
@@ -245,23 +267,28 @@ void TxExecutor::write(uint64_t key) {
 FINISH_WRITE:
 #if ADD_ANALYSIS
   sres_->local_write_latency_ += rdtscp() - start;
-#endif  // ADD_ANALYSIS
+#endif // ADD_ANALYSIS
   return;
 }
 
 /**
  * @brief transaction readWrite (RMW) operation
  */
-void TxExecutor::readWrite(uint64_t key) {
+void TxExecutor::readWrite(uint64_t key)
+{
   // if it already wrote the key object once.
-  if (searchWriteSet(key)) goto FINISH_WRITE;
+  if (searchWriteSet(key))
+    goto FINISH_WRITE;
 
-  for (auto rItr = read_set_.begin(); rItr != read_set_.end(); ++rItr) {
-    if ((*rItr).key_ == key) {  // hit
+  for (auto rItr = read_set_.begin(); rItr != read_set_.end(); ++rItr)
+  {
+    if ((*rItr).key_ == key)
+    { // hit
 #if DLR0
       (*rItr).rcdptr_->lock_.upgrade();
 #elif defined(DLR1)
-      if (!(*rItr).rcdptr_->lock_.tryupgrade()) {
+      if (!(*rItr).rcdptr_->lock_.tryupgrade())
+      {
         /**
          * No-wait and abort.
          */
@@ -273,8 +300,10 @@ void TxExecutor::readWrite(uint64_t key) {
       // upgrade success
       // remove old element of read set.
       for (auto lItr = r_lock_list_.begin(); lItr != r_lock_list_.end();
-           ++lItr) {
-        if (*lItr == &((*rItr).rcdptr_->lock_)) {
+           ++lItr)
+      {
+        if (*lItr == &((*rItr).rcdptr_->lock_))
+        {
           write_set_.emplace_back(key, (*rItr).rcdptr_);
           w_lock_list_.emplace_back(&(*rItr).rcdptr_->lock_);
           r_lock_list_.erase(lItr);
@@ -306,7 +335,8 @@ void TxExecutor::readWrite(uint64_t key) {
    */
   tuple->lock_.w_lock();
 #elif defined(DLR1)
-  if (!tuple->lock_.w_trylock()) {
+  if (!tuple->lock_.w_trylock())
+  {
     /**
      * Nowait and abort.
      */
@@ -333,7 +363,8 @@ FINISH_WRITE:
  * @brief unlock and clean-up local lock set.
  * @return void
  */
-void TxExecutor::unlockList() {
+void TxExecutor::unlockList()
+{
   for (auto itr = r_lock_list_.begin(); itr != r_lock_list_.end(); ++itr)
     (*itr)->r_unlock();
 

@@ -5,7 +5,8 @@
 
 using namespace std;
 
-class RWLock {
+class RWLock
+{
 public:
   std::atomic<int> counter;
   // counter == -1, write locked;
@@ -17,13 +18,16 @@ public:
   void init() { counter.store(0, memory_order_release); }
 
   // Read lock
-  void r_lock() {
+  void r_lock()
+  {
     int expected, desired;
     expected = counter.load(memory_order_acquire);
-    for (;;) {
+    for (;;)
+    {
       if (expected != -1)
         desired = expected + 1;
-      else {
+      else
+      {
         expected = counter.load(memory_order_acquire);
         continue;
       }
@@ -34,10 +38,12 @@ public:
     }
   }
 
-  bool r_trylock() {
+  bool r_trylock()
+  {
     int expected, desired;
     expected = counter.load(memory_order_acquire);
-    for (;;) {
+    for (;;)
+    {
       if (expected != -1)
         desired = expected + 1;
       else
@@ -47,15 +53,19 @@ public:
               expected, desired, memory_order_acq_rel, memory_order_acquire))
         return true;
     }
+    // return true;
   }
 
   void r_unlock() { counter--; }
 
-  void w_lock() {
+  void w_lock()
+  {
     int expected, desired(-1);
     expected = counter.load(memory_order_acquire);
-    for (;;) {
-      if (expected != 0) {
+    for (;;)
+    {
+      if (expected != 0)
+      {
         expected = counter.load(memory_order_acquire);
         continue;
       }
@@ -65,26 +75,33 @@ public:
     }
   }
 
-  bool w_trylock() {
+  bool w_trylock()
+  {
     int expected, desired(-1);
     expected = counter.load(memory_order_acquire);
-    for (;;) {
-      if (expected != 0) return false;
+    for (;;)
+    {
+      if (expected != 0)
+        return false;
 
       if (counter.compare_exchange_strong(
               expected, desired, memory_order_acq_rel, memory_order_acquire))
         return true;
     }
+    // return true;
   }
 
   void w_unlock() { counter++; }
 
   // Upgrae, read -> write
-  void upgrade() {
+  void upgrade()
+  {
     int expected, desired(-1);
     expected = counter.load(memory_order_acquire);
-    for (;;) {
-      if (expected != 1) {
+    for (;;)
+    {
+      if (expected != 1)
+      {
         expected = counter.load(memory_order_acquire);
         continue;
       }
@@ -95,11 +112,14 @@ public:
     }
   }
 
-  bool tryupgrade() {
+  bool tryupgrade()
+  {
     int expected, desired(-1);
     expected = counter.load(memory_order_acquire);
-    for (;;) {
-      if (expected != 1) return false;
+    for (;;)
+    {
+      if (expected != 1)
+        return false;
 
       if (counter.compare_exchange_strong(expected, desired,
                                           std::memory_order_acq_rel))
