@@ -14,11 +14,12 @@
 #define THREAD_NUM 10
 #define TUPLE_NUM 100000
 #define MAX_OPE 16
-#define SLEEP_POS 19
+#define SLEEP_POS 80
 #define RW_RATE 50
 #define EX_TIME 3
 #define PRE_NUM 1000000
-#define SLEEP_TIME 1000
+#define SLEEP_TIME 0
+#define SKEW_PAR 0.8
 
 // DEFINE_uint64(tuple_num, 1000000, "Total number of records");
 
@@ -426,7 +427,7 @@ int main(int argc, char *argv[])
     // std::cout << "#FLAGS_tuple_num" << FLAGS_tuple_num << "\n";
 
     Xoroshiro128Plus rnd;
-    FastZipf zipf(&rnd, 0, TUPLE_NUM);
+    FastZipf zipf(&rnd, SKEW_PAR, TUPLE_NUM);
 
     makeDB();
 

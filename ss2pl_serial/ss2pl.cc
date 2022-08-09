@@ -12,13 +12,14 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 1
-#define TUPLE_NUM 100000
+#define TUPLE_NUM 1000000
 #define MAX_OPE 16
-#define SLEEP_POS 19
+#define SLEEP_POS 80
 #define RW_RATE 50
-#define EX_TIME 1
-#define PRE_NUM 5000000
-#define SLEEP_TIME 1000
+#define EX_TIME 3
+#define PRE_NUM 3000000
+#define SLEEP_TIME 0
+#define SKEW_PAR 0.0
 
 // DEFINE_uint64(tuple_num, 1000000, "Total number of records");
 
@@ -243,7 +244,7 @@ int main(int argc, char *argv[])
 
     // initilize rnd and zipf
     Xoroshiro128Plus rnd;
-    FastZipf zipf(&rnd, 0, TUPLE_NUM);
+    FastZipf zipf(&rnd, SKEW_PAR, TUPLE_NUM);
 
     makeDB();
 
