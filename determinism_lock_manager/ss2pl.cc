@@ -9,7 +9,7 @@
 #include <atomic>
 #include <string>
 #include <algorithm>
-#include <deque>
+// #include <deque>
 #include <string>
 
 #define PAGE_SIZE 4096
@@ -130,7 +130,7 @@ class Tuple
 public:
     RWLock lock_;
     RWLock lock_for_lock_;
-    std::deque<uint64_t> wait_list_;
+    std::vector<uint64_t> wait_list_;
     uint64_t value_;
 };
 
@@ -353,6 +353,7 @@ GIANT_RETRY:
                     count++;
                     if (w_lock == &tuple->lock_)
                     {
+
                         // delete from task.set
                         item = trans.need_lock_.erase(item);
                         trans.lock_counter_--;
@@ -367,6 +368,7 @@ GIANT_RETRY:
                 }
                 if (!tuple->lock_.r_try_lock())
                 {
+                    std::cout << "read lock" << thread_id << ":" << item->key_ << std::endl;
                     item++;
                     tuple->wait_list_.push_back(tx_pos);
                 }
@@ -425,6 +427,7 @@ GIANT_RETRY:
                 {
                     // trans.status_ = Status::ABORTED;
                     // lock_wait に追加
+                    std::cout << "write lock" << thread_id << ":" << item->key_ << std::endl;
                     tuple->wait_list_.push_back(tx_pos);
                     item++;
                 }
@@ -459,6 +462,8 @@ GIANT_RETRY:
 
         while (trans.lock_counter_ > 0)
         {
+            // if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
+            //     break;
             for (auto item = trans.need_lock_.begin(); item != trans.need_lock_.end();)
             {
                 int count = 0;
@@ -485,8 +490,10 @@ GIANT_RETRY:
                                 item = trans.need_lock_.erase(item);
                                 trans.lock_counter_--;
                                 // delete from wait_list
-                                tuple->wait_list_.pop_front();
+                                // tuple->wait_list_.pop_front();
+                                tuple->wait_list_.erase(tuple->wait_list_.begin());
                             }
+                            break;
                         case Ope::WRITE:
                             for (auto r_lock : trans.r_lock_list_)
                             {
@@ -506,7 +513,8 @@ GIANT_RETRY:
                                         item = trans.need_lock_.erase(item);
                                         trans.lock_counter_--;
                                         // delete from wait_list
-                                        tuple->wait_list_.pop_front();
+                                        // tuple->wait_list_.pop_front();
+                                        tuple->wait_list_.erase(tuple->wait_list_.begin());
                                         // std::cout << "upgrade lock" << std::endl;
                                         // delete from read sets
                                         trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
@@ -524,8 +532,10 @@ GIANT_RETRY:
                                 trans.lock_counter_--;
                                 item = trans.need_lock_.erase(item);
                                 // delete from wait_list
-                                tuple->wait_list_.pop_front();
+                                // tuple->wait_list_.pop_front();
+                                tuple->wait_list_.erase(tuple->wait_list_.begin());
                             }
+                            break;
                         default:
                             std::cout << "invalid operation" << std::endl;
                             break;
@@ -631,6 +641,7 @@ int main(int argc, char *argv[])
     {
         total_count += re.commit_cnt_;
     }
+
     std::cout << "throughput:" << total_count / EX_TIME << std::endl;
 
     return 0;
