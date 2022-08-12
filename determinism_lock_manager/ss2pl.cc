@@ -320,6 +320,7 @@ GIANT_RETRY:
         trans.task_set_ = work_tx.task_set_;
         trans.need_lock_ = trans.task_set_;
         trans.lock_counter_ = trans.need_lock_.size();
+        // std::cout << trans.lock_counter_ << std::endl;
 
         trans.begin();
         // request all locks
@@ -368,9 +369,20 @@ GIANT_RETRY:
                 }
                 if (!tuple->lock_.r_try_lock())
                 {
-                    std::cout << "read lock" << thread_id << ":" << item->key_ << std::endl;
+                    // std::cout << "read lock" << thread_id << ":" << item->key_ << std::endl;
                     item++;
-                    tuple->wait_list_.push_back(tx_pos);
+                READ_WAIT_LIST:
+                    if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
+                        break;
+                    if (tuple->lock_for_lock_.w_try_lock())
+                    {
+                        tuple->wait_list_.push_back(tx_pos);
+                    }
+                    else
+                    {
+                        goto READ_WAIT_LIST;
+                    }
+                    tuple->lock_for_lock_.w_unlock();
                 }
                 else
                 {
@@ -397,7 +409,18 @@ GIANT_RETRY:
                         else
                         {
                             trans.w_lock_list_.emplace_back(&tuple->lock_);
-                            item = trans.need_lock_.erase(item);
+                        UPGRADE_WAIT_LIST:
+                            if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
+                                break;
+                            if (tuple->lock_for_lock_.w_try_lock())
+                            {
+                                tuple->wait_list_.push_back(tx_pos);
+                            }
+                            else
+                            {
+                                goto UPGRADE_WAIT_LIST;
+                            }
+                            tuple->lock_for_lock_.w_unlock();
                             trans.lock_counter_--;
                             // std::cout << "upgrade lock" << std::endl;
                             // delete from read sets
@@ -425,10 +448,21 @@ GIANT_RETRY:
                 }
                 if (!tuple->lock_.w_try_lock())
                 {
-                    // trans.status_ = Status::ABORTED;
-                    // lock_wait に追加
-                    std::cout << "write lock" << thread_id << ":" << item->key_ << std::endl;
-                    tuple->wait_list_.push_back(tx_pos);
+                // trans.status_ = Status::ABORTED;
+                // lock_wait に追加
+                // std::cout << "write lock" << thread_id << ":" << item->key_ << std::endl;
+                WRITE_WAIT_LIST:
+                    if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
+                        break;
+                    if (tuple->lock_for_lock_.w_try_lock())
+                    {
+                        tuple->wait_list_.push_back(tx_pos);
+                    }
+                    else
+                    {
+                        goto WRITE_WAIT_LIST;
+                    }
+                    tuple->lock_for_lock_.w_unlock();
                     item++;
                 }
                 else
@@ -447,26 +481,25 @@ GIANT_RETRY:
                 std::cout << "lock logical error" << std::endl;
                 break;
             }
-            // if (trans.status_ == Status::ABORTED)
-            // {
-            //     trans.abort();
-            //     // std::cout << "abort" << std::endl;
-            //     goto RETRY;
-            // }
         }
 
         __atomic_store_n(&tx_counter, tx_pos + 1, __ATOMIC_SEQ_CST);
 
         // release giant lock
         giant_lock.w_unlock();
+        // if (trans.lock_counter_ != 0 || trans.need_lock_.size() != 0)
+        // {
+        //     std::cout << trans.lock_counter_ << ":" << trans.need_lock_.size() << std::endl;
+        // }
 
-        while (trans.lock_counter_ > 0)
+        while (trans.need_lock_.size() > 0)
         {
             // if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
             //     break;
             for (auto item = trans.need_lock_.begin(); item != trans.need_lock_.end();)
             {
                 int count = 0;
+                bool dup_flag = false;
                 Tuple *tuple = &Table[item->key_];
                 if (tx_pos == __atomic_load_n(&tuple->wait_list_[0], __ATOMIC_SEQ_CST))
                 {
@@ -492,6 +525,7 @@ GIANT_RETRY:
                                 // delete from wait_list
                                 // tuple->wait_list_.pop_front();
                                 tuple->wait_list_.erase(tuple->wait_list_.begin());
+                                trans.r_lock_list_.emplace_back(&tuple->lock_);
                             }
                             break;
                         case Ope::WRITE:
@@ -519,8 +553,13 @@ GIANT_RETRY:
                                         // delete from read sets
                                         trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
                                     }
+                                    dup_flag = true;
                                     break;
                                 }
+                            }
+                            if (dup_flag)
+                            {
+                                break;
                             }
                             if (!tuple->lock_.w_try_lock())
                             {
@@ -534,6 +573,7 @@ GIANT_RETRY:
                                 // delete from wait_list
                                 // tuple->wait_list_.pop_front();
                                 tuple->wait_list_.erase(tuple->wait_list_.begin());
+                                trans.w_lock_list_.emplace_back(&tuple->lock_);
                             }
                             break;
                         default:
