@@ -187,6 +187,10 @@ public:
 
         uint64_t read_value = __atomic_load_n(&tuple->value_, __ATOMIC_SEQ_CST);
         read_set_.emplace_back(key, read_value, tuple);
+        // if (tuple->lock_.counter != -1)
+        // {
+        //     tuple->lock_.r_unlock();
+        // }
         return;
     }
 
@@ -197,6 +201,7 @@ public:
 
         __atomic_store_n(&tuple->value_, 100, __ATOMIC_SEQ_CST);
         write_set_.emplace_back(key, 100, tuple);
+        // tuple->lock_.w_unlock();
         return;
     }
 
@@ -316,6 +321,7 @@ POINT:
         // pre_tx_setからコピー
         Pre &work_tx = std::ref(Pre_tx_set[tx_pos]);
         trans.task_set_ = work_tx.task_set_;
+        // uint64_t operation_count = 0;
 
         trans.begin();
         // request all locks
@@ -337,7 +343,9 @@ POINT:
                     if (r_lock == &tuple->lock_)
                     {
                         // delete from task.set
+                        // trans.task_set_.erase(trans.task_set_.begin() + operation_count);
                         // trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
+
                         dup_flag = true;
                         break;
                     }
@@ -348,6 +356,7 @@ POINT:
                     if (w_lock == &tuple->lock_)
                     {
                         // delete from task.set
+                        // trans.task_set_.erase(trans.task_set_.begin() + operation_count);
                         // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
                         dup_flag = true;
                         break;
@@ -364,6 +373,7 @@ POINT:
                 else
                 {
                     // std::cout << "read lock" << std::endl;
+                    // operation_count++;
                     trans.r_lock_list_.emplace_back(&tuple->lock_);
                 }
                 break;
@@ -381,6 +391,7 @@ POINT:
                         }
                         else
                         {
+                            // operation_count++;
                             trans.w_lock_list_.emplace_back(&tuple->lock_);
                             // std::cout << "upgrade lock" << std::endl;
                             // delete from read sets
@@ -394,6 +405,7 @@ POINT:
                     count++;
                     if (&tuple->lock_ == w_lock)
                     {
+                        // trans.task_set_.erase(trans.task_set_.begin() + operation_count);
                         // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
                         dup_flag = true;
                         break;
@@ -410,10 +422,12 @@ POINT:
                 else
                 {
                     // std::cout << "write lock" << std::endl;
+                    // operation_count++;
                     trans.w_lock_list_.emplace_back(&tuple->lock_);
                 }
                 break;
             case Ope::SLEEP:
+                // operation_count++;
                 break;
             default:
                 std::cout << "lock logical error" << std::endl;

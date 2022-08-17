@@ -21,7 +21,7 @@
 #define EX_TIME 3
 #define PRE_NUM 1000000
 #define SLEEP_TIME 100
-#define SKEW_PAR 0.0
+#define SKEW_PAR 0.9
 
 uint64_t tx_counter;
 
@@ -377,12 +377,12 @@ GIANT_RETRY:
                     if (tuple->lock_for_lock_.w_try_lock())
                     {
                         tuple->wait_list_.push_back(tx_pos);
+                        tuple->lock_for_lock_.w_unlock();
                     }
                     else
                     {
                         goto READ_WAIT_LIST;
                     }
-                    tuple->lock_for_lock_.w_unlock();
                 }
                 else
                 {
@@ -393,43 +393,6 @@ GIANT_RETRY:
                 }
                 break;
             case Ope::WRITE:
-                for (auto r_lock : trans.r_lock_list_)
-                {
-                    count++;
-                    if (&tuple->lock_ == r_lock)
-                    {
-                        // delete from task_set and upgrade
-                        if (!tuple->lock_.try_upgrade())
-                        {
-                            // abort
-                            // trans.status_ = Status::ABORTED;
-                            tuple->wait_list_.push_back(tx_pos);
-                            item++;
-                        }
-                        else
-                        {
-                            trans.w_lock_list_.emplace_back(&tuple->lock_);
-                        UPGRADE_WAIT_LIST:
-                            if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
-                                break;
-                            if (tuple->lock_for_lock_.w_try_lock())
-                            {
-                                tuple->wait_list_.push_back(tx_pos);
-                            }
-                            else
-                            {
-                                goto UPGRADE_WAIT_LIST;
-                            }
-                            tuple->lock_for_lock_.w_unlock();
-                            trans.lock_counter_--;
-                            // std::cout << "upgrade lock" << std::endl;
-                            // delete from read sets
-                            trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
-                        }
-                        dup_flag = true;
-                        break;
-                    }
-                }
                 for (auto w_lock : trans.w_lock_list_)
                 {
                     count++;
@@ -442,6 +405,43 @@ GIANT_RETRY:
                         break;
                     }
                 }
+                for (auto r_lock : trans.r_lock_list_)
+                {
+                    count++;
+                    if (&tuple->lock_ == r_lock)
+                    {
+                        // delete from task_set and upgrade
+                        if (!tuple->lock_.try_upgrade())
+                        {
+                            // trans.status_ = Status::ABORTED;
+                            item++;
+                        UPGRADE_WAIT_LIST:
+                            if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
+                                break;
+                            if (tuple->lock_for_lock_.w_try_lock())
+                            {
+                                tuple->wait_list_.push_back(tx_pos);
+                                tuple->lock_for_lock_.w_unlock();
+                            }
+                            else
+                            {
+                                goto UPGRADE_WAIT_LIST;
+                            }
+                        }
+                        else
+                        {
+                            trans.w_lock_list_.emplace_back(&tuple->lock_);
+                            item = trans.need_lock_.erase(item);
+                            trans.lock_counter_--;
+                            // std::cout << "upgrade lock" << std::endl;
+                            // delete from read sets
+                            trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
+                        }
+                        dup_flag = true;
+                        break;
+                    }
+                }
+
                 if (dup_flag)
                 {
                     break;
@@ -457,12 +457,13 @@ GIANT_RETRY:
                     if (tuple->lock_for_lock_.w_try_lock())
                     {
                         tuple->wait_list_.push_back(tx_pos);
+                        tuple->lock_for_lock_.w_unlock();
                     }
                     else
                     {
                         goto WRITE_WAIT_LIST;
                     }
-                    tuple->lock_for_lock_.w_unlock();
+
                     item++;
                 }
                 else

@@ -12,14 +12,14 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 10
-#define TUPLE_NUM 100000
+#define TUPLE_NUM 1000000
 #define MAX_OPE 16
-#define SLEEP_POS 80
+#define SLEEP_POS 15
 #define RW_RATE 50
 #define EX_TIME 3
 #define PRE_NUM 1000000
-#define SLEEP_TIME 0
-#define SKEW_PAR 0.8
+#define SLEEP_TIME 100
+#define SKEW_PAR 0.9
 
 // DEFINE_uint64(tuple_num, 1000000, "Total number of records");
 
