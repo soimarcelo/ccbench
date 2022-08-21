@@ -14,15 +14,14 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 10
-#define TUPLE_NUM 100000
+#define TUPLE_NUM 1000000
 #define MAX_OPE 16
 #define SLEEP_POS 15
 #define RW_RATE 50
 #define EX_TIME 3
 #define PRE_NUM 1000000
-#define SLEEP_TIME 10
-#define SKEW_PAR 0.0
-#define WAIT_LIST_SIZE 100
+#define SLEEP_TIME 100
+#define SKEW_PAR 0.9
 
 uint64_t tx_counter;
 
@@ -131,11 +130,8 @@ class Tuple
 public:
     RWLock lock_;
     RWLock lock_for_lock_;
-    uint64_t upper;
-    uint64_t lower;
-    std::vector<uint64_t> wait_list_ = std::vector<uint64_t>(WAIT_LIST_SIZE, 0);
+    std::vector<uint64_t> wait_list_;
     uint64_t value_;
-    Tuple() : upper(0), lower(0) {}
 };
 
 class ReadOperation
@@ -322,14 +318,14 @@ GIANT_RETRY:
         // pre_tx_setからコピー
         Pre &work_tx = std::ref(Pre_tx_set[tx_pos]);
         trans.task_set_ = work_tx.task_set_;
-        // trans.need_lock_ = trans.task_set_;
-        trans.lock_counter_ = trans.task_set_.size();
+        trans.need_lock_ = trans.task_set_;
+        trans.lock_counter_ = trans.need_lock_.size();
         // std::cout << trans.lock_counter_ << std::endl;
 
         trans.begin();
         // request all locks
 
-        for (auto item = trans.task_set_.begin(); item != trans.task_set_.end();)
+        for (auto item = trans.need_lock_.begin(); item != trans.need_lock_.end();)
         {
             // search tuple
             Tuple *tuple = &Table[item->key_];
@@ -340,36 +336,37 @@ GIANT_RETRY:
             switch (item->ope_)
             {
             case Ope::READ:
-                for (auto dup_item = trans.task_set_.begin(); dup_item != item;)
+                for (auto &r_lock : trans.r_lock_list_)
                 {
-                    if (dup_item->key_ == item->key_)
+                    count++;
+                    if (r_lock == &tuple->lock_)
                     {
-                        switch (dup_item->ope_)
-                        {
-                        case Ope::READ:
-                            item = trans.task_set_.erase(item);
-                            dup_flag = true;
-                            break;
-                        case Ope::WRITE:
-                            item = trans.task_set_.erase(item);
-                            dup_flag = true;
-                            break;
-                        case Ope::SLEEP:
-                            break;
-                        dafault:
-                            std::cout << "invalid operation duplicate" << std::endl;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        dup_item++;
-                    }
-                    if (dup_flag)
+                        // delete from task.set
+                        item = trans.need_lock_.erase(item);
+                        trans.lock_counter_--;
+                        // trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
+                        dup_flag = true;
                         break;
+                    }
+                }
+                for (auto &w_lock : trans.w_lock_list_)
+                {
+                    count++;
+                    if (w_lock == &tuple->lock_)
+                    {
+
+                        // delete from task.set
+                        item = trans.need_lock_.erase(item);
+                        trans.lock_counter_--;
+                        // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
+                        dup_flag = true;
+                        break;
+                    }
                 }
                 if (dup_flag)
+                {
                     break;
+                }
                 if (!tuple->lock_.r_try_lock())
                 {
                     // std::cout << "read lock" << thread_id << ":" << item->key_ << std::endl;
@@ -379,106 +376,70 @@ GIANT_RETRY:
                         break;
                     if (tuple->lock_for_lock_.w_try_lock())
                     {
-                        // tuple->wait_list_.push_back(tx_pos);
-                        __atomic_store_n(&tuple->wait_list_[tuple->upper], tx_pos, __ATOMIC_SEQ_CST);
-                        __atomic_store_n(&tuple->upper, tuple->upper + 1, __ATOMIC_SEQ_CST);
-                        // tuple->wait_list_[tuple->upper] = tx_pos;
-                        // tuple->upper++;
-                        if (tuple->upper >= WAIT_LIST_SIZE)
-                        {
-                            std::cout << "wait list size over" << std::endl;
-                            return;
-                        }
+                        tuple->wait_list_.push_back(tx_pos);
                         tuple->lock_for_lock_.w_unlock();
                     }
                     else
                     {
                         goto READ_WAIT_LIST;
                     }
-                    trans.need_lock_.emplace_back(item->ope_, item->key_);
                 }
                 else
                 {
                     // std::cout << "read lock" << std::endl;
-                    // item = trans.need_lock_.erase(item);
+                    item = trans.need_lock_.erase(item);
                     trans.r_lock_list_.emplace_back(&tuple->lock_);
                     trans.lock_counter_--;
                 }
                 break;
             case Ope::WRITE:
-                for (auto dup_item = trans.task_set_.begin(); dup_item != item;)
+                for (auto w_lock : trans.w_lock_list_)
                 {
-                    if (dup_item->key_ == item->key_)
+                    count++;
+                    if (&tuple->lock_ == w_lock)
                     {
-                        switch (dup_item->ope_)
+                        // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
+                        item = trans.need_lock_.erase(item);
+                        trans.lock_counter_--;
+                        dup_flag = true;
+                        break;
+                    }
+                }
+                for (auto r_lock : trans.r_lock_list_)
+                {
+                    count++;
+                    if (&tuple->lock_ == r_lock)
+                    {
+                        // delete from task_set and upgrade
+                        if (!tuple->lock_.try_upgrade())
                         {
-                        case Ope::READ:
-                            item = trans.task_set_.erase(item);
-                            dup_flag = true;
-                            break;
-                        case Ope::WRITE:
-
-                            // delete from task_set and upgrade
-                            if (!tuple->lock_.try_upgrade())
+                            // trans.status_ = Status::ABORTED;
+                            item++;
+                        UPGRADE_WAIT_LIST:
+                            if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
+                                break;
+                            if (tuple->lock_for_lock_.w_try_lock())
                             {
-                                // trans.status_ = Status::ABORTED;
-                                item++;
-                            UPGRADE_WAIT_LIST:
-                                if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
-                                    break;
-                                if (tuple->lock_for_lock_.w_try_lock())
-                                {
-                                    // tuple->wait_list_.push_back(tx_pos);
-                                    __atomic_store_n(&tuple->wait_list_[tuple->upper], tx_pos, __ATOMIC_SEQ_CST);
-                                    __atomic_store_n(&tuple->upper, tuple->upper + 1, __ATOMIC_SEQ_CST);
-                                    // tuple->wait_list_[tuple->upper] = tx_pos;
-                                    // tuple->upper++;
-                                    if (tuple->upper >= WAIT_LIST_SIZE)
-                                    {
-                                        std::cout << "wait list size over" << std::endl;
-                                        return;
-                                    }
-                                    tuple->lock_for_lock_.w_unlock();
-                                }
-                                else
-                                {
-                                    goto UPGRADE_WAIT_LIST;
-                                }
-                                trans.need_lock_.emplace_back(item->ope_, item->key_);
+                                tuple->wait_list_.push_back(tx_pos);
+                                tuple->lock_for_lock_.w_unlock();
                             }
                             else
                             {
-                                trans.w_lock_list_.emplace_back(&tuple->lock_);
-                                // item = trans.need_lock_.erase(item);
-                                trans.lock_counter_--;
-                                // std::cout << "upgrade lock" << std::endl;
-                                // delete from read sets
-                                //
-                                for (auto r_lock : trans.r_lock_list_)
-                                {
-                                    count++;
-                                    if (&tuple->lock_ == r_lock)
-                                    {
-                                        trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
-                                        break;
-                                    }
-                                }
+                                goto UPGRADE_WAIT_LIST;
                             }
-                            dup_flag = true;
-                            break;
-                        case Ope::SLEEP:
-                            break;
-                        default:
-                            std::cout << "invalid operation duplicate" << std::endl;
-                            break;
                         }
-                    }
-                    else
-                    {
-                        dup_item++;
-                    }
-                    if (dup_flag)
+                        else
+                        {
+                            trans.w_lock_list_.emplace_back(&tuple->lock_);
+                            item = trans.need_lock_.erase(item);
+                            trans.lock_counter_--;
+                            // std::cout << "upgrade lock" << std::endl;
+                            // delete from read sets
+                            trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
+                        }
+                        dup_flag = true;
                         break;
+                    }
                 }
 
                 if (dup_flag)
@@ -495,16 +456,7 @@ GIANT_RETRY:
                         break;
                     if (tuple->lock_for_lock_.w_try_lock())
                     {
-                        // tuple->wait_list_.push_back(tx_pos);
-                        __atomic_store_n(&tuple->wait_list_[tuple->upper], tx_pos, __ATOMIC_SEQ_CST);
-                        __atomic_store_n(&tuple->upper, tuple->upper + 1, __ATOMIC_SEQ_CST);
-                        // tuple->wait_list_[tuple->upper] = tx_pos;
-                        // tuple->upper++;
-                        if (tuple->upper >= WAIT_LIST_SIZE)
-                        {
-                            std::cout << "wait list size over" << std::endl;
-                            return;
-                        }
+                        tuple->wait_list_.push_back(tx_pos);
                         tuple->lock_for_lock_.w_unlock();
                     }
                     else
@@ -523,7 +475,7 @@ GIANT_RETRY:
                 }
                 break;
             case Ope::SLEEP:
-                // item = trans.need_lock_.erase(item);
+                item = trans.need_lock_.erase(item);
                 trans.lock_counter_--;
                 break;
             default:
@@ -550,7 +502,7 @@ GIANT_RETRY:
                 int count = 0;
                 bool dup_flag = false;
                 Tuple *tuple = &Table[item->key_];
-                if (tx_pos == __atomic_load_n(&tuple->wait_list_[tuple->lower], __ATOMIC_SEQ_CST))
+                if (tx_pos == __atomic_load_n(&tuple->wait_list_[0], __ATOMIC_SEQ_CST))
                 {
                     if (!tuple->lock_for_lock_.w_try_lock())
                     {
@@ -573,8 +525,7 @@ GIANT_RETRY:
                                 trans.lock_counter_--;
                                 // delete from wait_list
                                 // tuple->wait_list_.pop_front();
-                                // tuple->wait_list_.erase(tuple->wait_list_.begin());
-                                tuple->lower++;
+                                tuple->wait_list_.erase(tuple->wait_list_.begin());
                                 trans.r_lock_list_.emplace_back(&tuple->lock_);
                             }
                             break;
@@ -598,8 +549,7 @@ GIANT_RETRY:
                                         trans.lock_counter_--;
                                         // delete from wait_list
                                         // tuple->wait_list_.pop_front();
-                                        // tuple->wait_list_.erase(tuple->wait_list_.begin());
-                                        tuple->lower++;
+                                        tuple->wait_list_.erase(tuple->wait_list_.begin());
                                         // std::cout << "upgrade lock" << std::endl;
                                         // delete from read sets
                                         trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
@@ -623,8 +573,7 @@ GIANT_RETRY:
                                 item = trans.need_lock_.erase(item);
                                 // delete from wait_list
                                 // tuple->wait_list_.pop_front();
-                                // tuple->wait_list_.erase(tuple->wait_list_.begin());
-                                tuple->lower++;
+                                tuple->wait_list_.erase(tuple->wait_list_.begin());
                                 trans.w_lock_list_.emplace_back(&tuple->lock_);
                             }
                             break;
@@ -680,8 +629,6 @@ int main(int argc, char *argv[])
     makeDB();
 
     tx_counter = 0;
-
-    Tuple *tuple = &Table[5];
 
     bool start = false;
     bool quit = false;
