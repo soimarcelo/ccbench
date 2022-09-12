@@ -189,6 +189,7 @@ public:
             tuple->lock_.r_unlock();
         }
         return;
+        　
     }
 
     void write(const uint64_t key)

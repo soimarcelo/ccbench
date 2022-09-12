@@ -16,10 +16,10 @@
 #define THREAD_NUM 10
 #define TUPLE_NUM 100000
 #define MAX_OPE 16
-#define SLEEP_POS 15
+#define SLEEP_POS 30
 #define RW_RATE 50
 #define EX_TIME 3
-#define PRE_NUM 1000000
+#define PRE_NUM 10000
 #define SLEEP_TIME 10
 #define SKEW_PAR 0.0
 #define WAIT_LIST_SIZE 100
@@ -370,10 +370,11 @@ GIANT_RETRY:
                 }
                 if (dup_flag)
                     break;
+
                 if (!tuple->lock_.r_try_lock())
                 {
                     // std::cout << "read lock" << thread_id << ":" << item->key_ << std::endl;
-                    item++;
+
                 READ_WAIT_LIST:
                     if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
                         break;
@@ -382,6 +383,7 @@ GIANT_RETRY:
                         // tuple->wait_list_.push_back(tx_pos);
                         __atomic_store_n(&tuple->wait_list_[tuple->upper], tx_pos, __ATOMIC_SEQ_CST);
                         __atomic_store_n(&tuple->upper, tuple->upper + 1, __ATOMIC_SEQ_CST);
+                        // std::cout << tuple->upper << item->key_ << std::endl;
                         // tuple->wait_list_[tuple->upper] = tx_pos;
                         // tuple->upper++;
                         if (tuple->upper >= WAIT_LIST_SIZE)
@@ -404,6 +406,7 @@ GIANT_RETRY:
                     trans.r_lock_list_.emplace_back(&tuple->lock_);
                     trans.lock_counter_--;
                 }
+                item++;
                 break;
             case Ope::WRITE:
                 for (auto dup_item = trans.task_set_.begin(); dup_item != item;)
@@ -419,10 +422,11 @@ GIANT_RETRY:
                         case Ope::WRITE:
 
                             // delete from task_set and upgrade
+
                             if (!tuple->lock_.try_upgrade())
                             {
                                 // trans.status_ = Status::ABORTED;
-                                item++;
+
                             UPGRADE_WAIT_LIST:
                                 if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
                                     break;
@@ -431,6 +435,7 @@ GIANT_RETRY:
                                     // tuple->wait_list_.push_back(tx_pos);
                                     __atomic_store_n(&tuple->wait_list_[tuple->upper], tx_pos, __ATOMIC_SEQ_CST);
                                     __atomic_store_n(&tuple->upper, tuple->upper + 1, __ATOMIC_SEQ_CST);
+                                    std::cout << tuple->upper << item->key_ << std::endl;
                                     // tuple->wait_list_[tuple->upper] = tx_pos;
                                     // tuple->upper++;
                                     if (tuple->upper >= WAIT_LIST_SIZE)
@@ -464,6 +469,7 @@ GIANT_RETRY:
                                     }
                                 }
                             }
+                            item++;
                             dup_flag = true;
                             break;
                         case Ope::SLEEP:
@@ -485,11 +491,13 @@ GIANT_RETRY:
                 {
                     break;
                 }
+
                 if (!tuple->lock_.w_try_lock())
                 {
-                // trans.status_ = Status::ABORTED;
-                // lock_wait に追加
-                // std::cout << "write lock" << thread_id << ":" << item->key_ << std::endl;
+                    // trans.status_ = Status::ABORTED;
+                    // lock_wait に追加
+                    // std::cout << "write lock" << thread_id << ":" << item->key_ << std::endl;
+
                 WRITE_WAIT_LIST:
                     if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
                         break;
@@ -498,6 +506,7 @@ GIANT_RETRY:
                         // tuple->wait_list_.push_back(tx_pos);
                         __atomic_store_n(&tuple->wait_list_[tuple->upper], tx_pos, __ATOMIC_SEQ_CST);
                         __atomic_store_n(&tuple->upper, tuple->upper + 1, __ATOMIC_SEQ_CST);
+                        std::cout << tuple->upper << item->key_ << std::endl;
                         // tuple->wait_list_[tuple->upper] = tx_pos;
                         // tuple->upper++;
                         if (tuple->upper >= WAIT_LIST_SIZE)
@@ -511,8 +520,6 @@ GIANT_RETRY:
                     {
                         goto WRITE_WAIT_LIST;
                     }
-
-                    item++;
                 }
                 else
                 {
@@ -521,9 +528,11 @@ GIANT_RETRY:
                     item = trans.need_lock_.erase(item);
                     trans.w_lock_list_.emplace_back(&tuple->lock_);
                 }
+                item++;
                 break;
             case Ope::SLEEP:
                 // item = trans.need_lock_.erase(item);
+                item++;
                 trans.lock_counter_--;
                 break;
             default:

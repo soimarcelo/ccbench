@@ -395,7 +395,6 @@ GIANT_RETRY:
             case Ope::WRITE:
                 for (auto w_lock : trans.w_lock_list_)
                 {
-                    count++;
                     if (&tuple->lock_ == w_lock)
                     {
                         // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
@@ -514,6 +513,37 @@ GIANT_RETRY:
                         switch (item->ope_)
                         {
                         case Ope::READ:
+                            for (auto &r_lock : trans.r_lock_list_)
+                            {
+                                count++;
+                                if (r_lock == &tuple->lock_)
+                                {
+                                    // delete from task.set
+                                    item = trans.need_lock_.erase(item);
+                                    trans.lock_counter_--;
+                                    // trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
+                                    dup_flag = true;
+                                    break;
+                                }
+                            }
+                            for (auto &w_lock : trans.w_lock_list_)
+                            {
+                                count++;
+                                if (w_lock == &tuple->lock_)
+                                {
+
+                                    // delete from task.set
+                                    item = trans.need_lock_.erase(item);
+                                    trans.lock_counter_--;
+                                    // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
+                                    dup_flag = true;
+                                    break;
+                                }
+                            }
+                            if (dup_flag)
+                            {
+                                break;
+                            }
                             if (!tuple->lock_.r_try_lock())
                             {
                                 // error
@@ -530,6 +560,18 @@ GIANT_RETRY:
                             }
                             break;
                         case Ope::WRITE:
+                            for (auto w_lock : trans.w_lock_list_)
+                            {
+                                // count++;
+                                if (&tuple->lock_ == w_lock)
+                                {
+                                    // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
+                                    item = trans.need_lock_.erase(item);
+                                    trans.lock_counter_--;
+                                    dup_flag = true;
+                                    break;
+                                }
+                            }
                             for (auto r_lock : trans.r_lock_list_)
                             {
                                 count++;
