@@ -21,7 +21,8 @@
 #define EX_TIME 3
 #define PRE_NUM 1000000
 #define SLEEP_TIME 100
-#define SKEW_PAR 0.9
+#define SKEW_PAR 0.0
+// #define WAIT_LIST_SIZE 100
 
 uint64_t tx_counter;
 

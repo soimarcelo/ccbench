@@ -14,14 +14,14 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 10
-#define TUPLE_NUM 100000
+#define TUPLE_NUM 10000
 #define MAX_OPE 16
 #define SLEEP_POS 15
 #define RW_RATE 50
 #define EX_TIME 3
-#define PRE_NUM 10000
-#define SLEEP_TIME 10
-#define SKEW_PAR 0.0
+#define PRE_NUM 1000000
+#define SLEEP_TIME 100
+#define SKEW_PAR 0.99
 #define WAIT_LIST_SIZE 100
 
 uint64_t tx_counter;
@@ -133,9 +133,9 @@ public:
     RWLock lock_for_lock_;
     uint64_t upper;
     uint64_t lower;
-    std::vector<uint64_t> wait_list_ = std::vector<uint64_t>(WAIT_LIST_SIZE, 0);
+    std::vector<uint64_t> wait_list_;
     uint64_t value_;
-    Tuple() : upper(0), lower(0) {}
+    Tuple() : upper(1), lower(1), wait_list_(100, 0) {}
 
     void wait_add(uint64_t tx_pos)
     {
@@ -144,7 +144,6 @@ public:
         {
             __atomic_store_n(&wait_list_[upper], tx_pos, __ATOMIC_SEQ_CST);
             __atomic_store_n(&upper, upper + 1, __ATOMIC_SEQ_CST);
-            // std::cout << tuple->upper << item->key_ << std::endl;
             if (upper >= WAIT_LIST_SIZE)
             {
                 std::cout << "wait list size over" << std::endl;
@@ -294,7 +293,7 @@ public:
     }
 };
 
-void lockmanager_regist(Transaction trans, uint64_t tx_pos)
+void lockmanager_regist(Transaction &trans, uint64_t tx_pos, int thread_id)
 {                    // lock取りに行って、取れなかったらlock managerに登録するフェーズ
     int ope_pos = 0; //オペレーションがtx中で何番目かを示す
     for (auto item = trans.task_set_.begin(); item != trans.task_set_.end();)
@@ -307,6 +306,7 @@ void lockmanager_regist(Transaction trans, uint64_t tx_pos)
         case Ope::READ:
             if (trans.dup_check(item->key_, ope_pos) > -1)
             {
+                // std::cout << item->key_ << "read dup" << thread_id << std::endl;
                 item = trans.task_set_.erase(item);
                 break;
             }
@@ -325,6 +325,7 @@ void lockmanager_regist(Transaction trans, uint64_t tx_pos)
         case Ope::WRITE:
             if (trans.dup_check(item->key_, ope_pos) == 0)
             {
+                // std::cout << item->key_ << "upgrade dup" << thread_id << std::endl;
                 // upgrade
                 if (!tuple->lock_.try_upgrade())
                 {
@@ -350,7 +351,8 @@ void lockmanager_regist(Transaction trans, uint64_t tx_pos)
             }
             else if (trans.dup_check(item->key_, ope_pos) == 1)
             {
-                item = trans.task_set_.erase(item);
+                // std::cout << item->key_ << "write dup" << thread_id << std::endl;
+                // item = trans.task_set_.erase(item);
                 break;
             }
 
@@ -364,9 +366,11 @@ void lockmanager_regist(Transaction trans, uint64_t tx_pos)
             {
                 trans.w_lock_list_.emplace_back(&tuple->lock_);
             }
-            break;
             item++;
+            break;
+
         case Ope::SLEEP:
+            item++;
             break;
         default:
             std::cout << "lock logical error" << std::endl;
@@ -376,12 +380,16 @@ void lockmanager_regist(Transaction trans, uint64_t tx_pos)
     }
 }
 
-void check_waitlist(Transaction trans, uint64_t tx_pos)
+void check_waitlist(Transaction &trans, uint64_t tx_pos, int thread_id)
 {
     while (trans.need_lock_.size() > 0)
     {
+        // if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
+        //     break;
+        std::cout << trans.need_lock_.size() << std::endl;
         for (auto item = trans.need_lock_.begin(); item != trans.need_lock_.end();)
         {
+            int count = 0; // upgrade read lock削除用
             bool dup_flag = false;
             Tuple *tuple = &Table[item->key_];
             if (tx_pos == __atomic_load_n(&tuple->wait_list_[tuple->lower], __ATOMIC_SEQ_CST))
@@ -409,13 +417,13 @@ void check_waitlist(Transaction trans, uint64_t tx_pos)
                         }
                         break;
                     case Ope::WRITE:
-                        int count = 0;
                         // upgradeかどうか
                         for (auto r_lock : trans.r_lock_list_)
                         {
                             count++;
                             if (&tuple->lock_ == r_lock)
                             {
+                                // std::cout << item->key_ << "upgrade" << thread_id << std::endl;
                                 // delete from task_set and upgrade
                                 if (!tuple->lock_.try_upgrade())
                                 {
@@ -498,6 +506,12 @@ void makeDB()
     for (int i = 0; i < TUPLE_NUM; i++)
     {
         Table[i].value_ = 0;
+        Table[i].upper = 0;
+        Table[i].lower = 0;
+        for (int j = 0; j < WAIT_LIST_SIZE; j++)
+        {
+            Table[i].wait_list_.push_back(0);
+        }
     }
 }
 
@@ -523,6 +537,7 @@ GIANT_RETRY:
         {
             goto GIANT_RETRY;
         }
+        // std::cout << "1" << thread_id << std::endl;
 
         //取得すべきtxの現在地　ロック必要か
         tx_pos = __atomic_load_n(&tx_counter, __ATOMIC_SEQ_CST);
@@ -537,11 +552,17 @@ GIANT_RETRY:
         trans.task_set_ = work_tx.task_set_;
 
         trans.begin();
-
-        lockmanager_regist(trans, tx_pos);
+        // std::cout << "1.5" << thread_id << std::endl;
+        // lock_managerに登録
+        lockmanager_regist(trans, tx_pos, thread_id);
+        // std::cout << "2" << thread_id << std::endl;
 
         // release giant lock
         giant_lock.w_unlock();
+
+        check_waitlist(trans, tx_pos, thread_id);
+
+        // std::cout << "3" << thread_id << std::endl;
 
         for (auto &task : trans.task_set_)
         {
@@ -566,13 +587,13 @@ GIANT_RETRY:
         }
         trans.commit();
         myres.commit_cnt_++;
+
+        // std::cout << "4" << thread_id << std::endl;
     }
 }
 
 int main(int argc, char *argv[])
 {
-    // gflags::ParseCommandLineFlags(&argc, &argv, true);
-    // std::cout << "#FLAGS_tuple_num" << FLAGS_tuple_num << "\n";
 
     // initilize rnd and zipf
     Xoroshiro128Plus rnd;
@@ -582,7 +603,9 @@ int main(int argc, char *argv[])
 
     tx_counter = 0;
 
-    Tuple *tuple = &Table[5];
+    // Tuple *tuple = &Table[5];
+
+    // std::cout << tuple->wait_list_.size() << "gaho" << std::endl;
 
     bool start = false;
     bool quit = false;
