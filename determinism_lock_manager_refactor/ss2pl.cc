@@ -14,14 +14,14 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 10
-#define TUPLE_NUM 10000
+#define TUPLE_NUM 1000000
 #define MAX_OPE 16
 #define SLEEP_POS 15
 #define RW_RATE 50
 #define EX_TIME 3
 #define PRE_NUM 1000000
-#define SLEEP_TIME 100
-#define SKEW_PAR 0.99
+#define SLEEP_TIME 1
+#define SKEW_PAR 0.0
 #define WAIT_LIST_SIZE 100
 
 uint64_t tx_counter;
@@ -137,12 +137,12 @@ public:
     uint64_t value_;
     Tuple() : upper(1), lower(1), wait_list_(100, 0) {}
 
-    void wait_add(uint64_t tx_pos)
+    void wait_add(uint64_t tx_id)
     {
     READ_WAIT_LIST:
         if (lock_for_lock_.w_try_lock())
         {
-            __atomic_store_n(&wait_list_[upper], tx_pos, __ATOMIC_SEQ_CST);
+            __atomic_store_n(&wait_list_[upper], tx_id, __ATOMIC_SEQ_CST);
             __atomic_store_n(&upper, upper + 1, __ATOMIC_SEQ_CST);
             if (upper >= WAIT_LIST_SIZE)
             {
@@ -200,7 +200,7 @@ class Transaction
 public:
     Status status_;
     std::vector<Task> task_set_;
-    std::vector<Task> need_lock_;
+    std::vector<Task> future_lock_;
     std::vector<RWLock *> r_lock_list_;
     std::vector<RWLock *> w_lock_list_;
     std::vector<ReadOperation> read_set_;
@@ -293,7 +293,7 @@ public:
     }
 };
 
-void lockmanager_regist(Transaction &trans, uint64_t tx_pos, int thread_id)
+void lockmanager_regist(Transaction &trans, uint64_t tx_id, int thread_id)
 {                    // lock取りに行って、取れなかったらlock managerに登録するフェーズ
     int ope_pos = 0; //オペレーションがtx中で何番目かを示す
     for (auto item = trans.task_set_.begin(); item != trans.task_set_.end();)
@@ -306,65 +306,44 @@ void lockmanager_regist(Transaction &trans, uint64_t tx_pos, int thread_id)
         case Ope::READ:
             if (trans.dup_check(item->key_, ope_pos) > -1)
             {
+                //既に同一トランザクション内で同じデータアイテムに対して、Read/Writeを行なっている
                 // std::cout << item->key_ << "read dup" << thread_id << std::endl;
-                item = trans.task_set_.erase(item);
-                break;
-            }
-
-            if (!tuple->lock_.r_try_lock())
-            {
-                tuple->wait_add(tx_pos);
-                trans.need_lock_.emplace_back(item->ope_, item->key_);
+                // item = trans.task_set_.erase(item);
+                // item++;
+                // break;
             }
             else
             {
-                trans.r_lock_list_.emplace_back(&tuple->lock_);
+                tuple->wait_add(tx_id);
+                trans.future_lock_.emplace_back(item->ope_, item->key_);
             }
+
             item++;
             break;
         case Ope::WRITE:
             if (trans.dup_check(item->key_, ope_pos) == 0)
             {
+                //既に同一トランザクション内で同じデータアイテムに対して、Readを行なっている
                 // std::cout << item->key_ << "upgrade dup" << thread_id << std::endl;
                 // upgrade
-                if (!tuple->lock_.try_upgrade())
-                {
-                    tuple->wait_add(tx_pos);
-                    trans.need_lock_.emplace_back(item->ope_, item->key_);
-                }
-                else
-                {
-                    trans.w_lock_list_.emplace_back(&tuple->lock_);
-                    int count = 0;
-                    for (auto r_lock : trans.r_lock_list_)
-                    {
-                        count++;
-                        if (&tuple->lock_ == r_lock)
-                        {
-                            trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
-                            break;
-                        }
-                    }
-                }
-                item++;
-                break;
+                tuple->wait_add(tx_id);
+                trans.future_lock_.emplace_back(item->ope_, item->key_);
+                // item++;
+                // break;
             }
             else if (trans.dup_check(item->key_, ope_pos) == 1)
             {
+                //既に同一トランザクション内で同じデータアイテムに対して、Writeを行なっている
                 // std::cout << item->key_ << "write dup" << thread_id << std::endl;
                 // item = trans.task_set_.erase(item);
-                break;
-            }
-
-            if (!tuple->lock_.w_try_lock())
-            {
-                // lock_wait に追加
-                tuple->wait_add(tx_pos);
-                trans.need_lock_.emplace_back(item->ope_, item->key_);
+                // item++;
+                // break;
             }
             else
             {
-                trans.w_lock_list_.emplace_back(&tuple->lock_);
+                // lock_wait に追加
+                tuple->wait_add(tx_id);
+                trans.future_lock_.emplace_back(item->ope_, item->key_);
             }
             item++;
             break;
@@ -380,19 +359,20 @@ void lockmanager_regist(Transaction &trans, uint64_t tx_pos, int thread_id)
     }
 }
 
-void check_waitlist(Transaction &trans, uint64_t tx_pos, int thread_id)
+void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id)
 {
-    while (trans.need_lock_.size() > 0)
+    while (trans.future_lock_.size() > 0)
     {
         // if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
         //     break;
-        std::cout << trans.need_lock_.size() << std::endl;
-        for (auto item = trans.need_lock_.begin(); item != trans.need_lock_.end();)
+
+        for (auto item = trans.future_lock_.begin(); item != trans.future_lock_.end();)
         {
+            // std::cout << trans.future_lock_.size() << ":" << item->key_ << std::endl;
             int count = 0; // upgrade read lock削除用
             bool dup_flag = false;
             Tuple *tuple = &Table[item->key_];
-            if (tx_pos == __atomic_load_n(&tuple->wait_list_[tuple->lower], __ATOMIC_SEQ_CST))
+            if (tx_id == __atomic_load_n(&tuple->wait_list_[tuple->lower], __ATOMIC_SEQ_CST))
             {
                 if (!tuple->lock_for_lock_.w_try_lock())
                 {
@@ -411,7 +391,7 @@ void check_waitlist(Transaction &trans, uint64_t tx_pos, int thread_id)
                         }
                         else
                         {
-                            item = trans.need_lock_.erase(item);
+                            item = trans.future_lock_.erase(item);
                             __atomic_store_n(&tuple->lower, tuple->lower + 1, __ATOMIC_SEQ_CST);
                             trans.r_lock_list_.emplace_back(&tuple->lock_);
                         }
@@ -433,7 +413,7 @@ void check_waitlist(Transaction &trans, uint64_t tx_pos, int thread_id)
                                 else
                                 {
                                     trans.w_lock_list_.emplace_back(&tuple->lock_);
-                                    item = trans.need_lock_.erase(item);
+                                    item = trans.future_lock_.erase(item);
                                     __atomic_store_n(&tuple->lower, tuple->lower + 1, __ATOMIC_SEQ_CST);
                                     trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
                                 }
@@ -453,7 +433,7 @@ void check_waitlist(Transaction &trans, uint64_t tx_pos, int thread_id)
                         }
                         else
                         {
-                            item = trans.need_lock_.erase(item);
+                            item = trans.future_lock_.erase(item);
                             __atomic_store_n(&tuple->lower, tuple->lower + 1, __ATOMIC_SEQ_CST);
                             trans.w_lock_list_.emplace_back(&tuple->lock_);
                         }
@@ -520,7 +500,7 @@ void worker(int thread_id, int &ready, const bool &start, const bool &quit)
     Result &myres = std::ref(AllResult[thread_id]);
 
     Transaction trans;
-    uint64_t tx_pos;
+    uint64_t tx_id;
 
     __atomic_store_n(&ready, 1, __ATOMIC_SEQ_CST);
 
@@ -540,27 +520,27 @@ GIANT_RETRY:
         // std::cout << "1" << thread_id << std::endl;
 
         //取得すべきtxの現在地　ロック必要か
-        tx_pos = __atomic_load_n(&tx_counter, __ATOMIC_SEQ_CST);
-        if (tx_pos >= PRE_NUM)
+        tx_id = __atomic_load_n(&tx_counter, __ATOMIC_SEQ_CST);
+        if (tx_id >= PRE_NUM)
         {
             return;
         }
-        __atomic_store_n(&tx_counter, tx_pos + 1, __ATOMIC_SEQ_CST);
+        __atomic_store_n(&tx_counter, tx_id + 1, __ATOMIC_SEQ_CST);
 
         // pre_tx_setからコピー
-        Pre &work_tx = std::ref(Pre_tx_set[tx_pos]);
+        Pre &work_tx = std::ref(Pre_tx_set[tx_id]);
         trans.task_set_ = work_tx.task_set_;
 
         trans.begin();
         // std::cout << "1.5" << thread_id << std::endl;
         // lock_managerに登録
-        lockmanager_regist(trans, tx_pos, thread_id);
+        lockmanager_regist(trans, tx_id, thread_id);
         // std::cout << "2" << thread_id << std::endl;
 
         // release giant lock
         giant_lock.w_unlock();
 
-        check_waitlist(trans, tx_pos, thread_id);
+        check_waitlist(trans, tx_id, thread_id);
 
         // std::cout << "3" << thread_id << std::endl;
 

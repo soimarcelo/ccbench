@@ -13,7 +13,7 @@
 #define PAGE_SIZE 4096
 #define THREAD_NUM 10
 #define TUPLE_NUM 10000
-#define MAX_OPE 100
+#define MAX_OPE 10
 #define RW_RATE 50
 #define EX_TIME 3
 
