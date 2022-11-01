@@ -1,0 +1,55 @@
+Determining if the pthread_create exist failed with the following output:
+Change Dir: /home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_4c2ed/fast"
+/usr/bin/make -f CMakeFiles/cmTC_4c2ed.dir/build.make CMakeFiles/cmTC_4c2ed.dir/build
+make[1]: Entering directory '/home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_4c2ed.dir/CheckSymbolExists.cxx.o
+/usr/bin/c++    -std=gnu++1z -o CMakeFiles/cmTC_4c2ed.dir/CheckSymbolExists.cxx.o -c /home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp/CheckSymbolExists.cxx
+Linking CXX executable cmTC_4c2ed
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_4c2ed.dir/link.txt --verbose=1
+/usr/bin/c++       CMakeFiles/cmTC_4c2ed.dir/CheckSymbolExists.cxx.o  -o cmTC_4c2ed 
+CMakeFiles/cmTC_4c2ed.dir/CheckSymbolExists.cxx.o: In function `main':
+CheckSymbolExists.cxx:(.text+0x1b): undefined reference to `pthread_create'
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_4c2ed.dir/build.make:97: recipe for target 'cmTC_4c2ed' failed
+make[1]: *** [cmTC_4c2ed] Error 1
+make[1]: Leaving directory '/home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp'
+Makefile:126: recipe for target 'cmTC_4c2ed/fast' failed
+make: *** [cmTC_4c2ed/fast] Error 2
+
+File /home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp/CheckSymbolExists.cxx:
+/* */
+#include <pthread.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef pthread_create
+  return ((int*)(&pthread_create))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_ec9bd/fast"
+/usr/bin/make -f CMakeFiles/cmTC_ec9bd.dir/build.make CMakeFiles/cmTC_ec9bd.dir/build
+make[1]: Entering directory '/home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_ec9bd.dir/CheckFunctionExists.cxx.o
+/usr/bin/c++    -DCHECK_FUNCTION_EXISTS=pthread_create   -std=gnu++1z -o CMakeFiles/cmTC_ec9bd.dir/CheckFunctionExists.cxx.o -c /home/ccbench/lock_manager_fixed/build/CMakeFiles/CheckLibraryExists/CheckFunctionExists.cxx
+Linking CXX executable cmTC_ec9bd
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_ec9bd.dir/link.txt --verbose=1
+/usr/bin/c++   -DCHECK_FUNCTION_EXISTS=pthread_create    CMakeFiles/cmTC_ec9bd.dir/CheckFunctionExists.cxx.o  -o cmTC_ec9bd -lpthreads 
+/usr/bin/ld: cannot find -lpthreads
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_ec9bd.dir/build.make:97: recipe for target 'cmTC_ec9bd' failed
+make[1]: *** [cmTC_ec9bd] Error 1
+make[1]: Leaving directory '/home/ccbench/lock_manager_fixed/build/CMakeFiles/CMakeTmp'
+Makefile:126: recipe for target 'cmTC_ec9bd/fast' failed
+make: *** [cmTC_ec9bd/fast] Error 2
+
+

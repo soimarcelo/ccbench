@@ -12,13 +12,13 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 10
-#define TUPLE_NUM 1000000
-#define MAX_OPE 16
-#define SLEEP_POS 15
+#define TUPLE_NUM 100000
+#define MAX_OPE 50
+#define SLEEP_POS 8
 #define RW_RATE 50
 #define EX_TIME 3
-#define PRE_NUM 1000000
-#define SLEEP_TIME 100
+#define PRE_NUM 50000
+#define SLEEP_TIME 1000
 #define SKEW_PAR 0.9
 
 // DEFINE_uint64(tuple_num, 1000000, "Total number of records");
@@ -340,19 +340,19 @@ void makeTask(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
         {
             tasks.emplace_back(Ope::SLEEP, 0);
         }
-
-        if ((rnd.next() % 100) < RW_RATE)
-        {
-            // std::cout << "read" << std::endl;
-            tasks.emplace_back(Ope::READ, random_gen_key);
-        }
         else
         {
-            // std::cout << "write" << std::endl;
-            tasks.emplace_back(Ope::WRITE, random_gen_key);
+
+            if ((rnd.next() % 100) < RW_RATE)
+            {
+                tasks.emplace_back(Ope::READ, random_gen_key + 1);
+            }
+            else
+            {
+                tasks.emplace_back(Ope::WRITE, random_gen_key + 1);
+            }
         }
     }
-    // std::sort(tasks.begin(), tasks.end());
 }
 
 void makeDB()

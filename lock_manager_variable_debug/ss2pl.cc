@@ -13,16 +13,15 @@
 #include <string>
 
 #define PAGE_SIZE 4096
-#define THREAD_NUM 10
-#define TUPLE_NUM 1000000
+#define THREAD_NUM 4
+#define TUPLE_NUM 10000000
 #define MAX_OPE 16
 #define SLEEP_POS 15
 #define RW_RATE 50
 #define EX_TIME 3
-#define PRE_NUM 100000
+#define PRE_NUM 120000
 #define SLEEP_TIME 100
-#define SKEW_PAR 0.0
-#define WAIT_LIST_SIZE 100
+#define SKEW_PAR 0.9
 
 uint64_t tx_counter;
 
@@ -131,29 +130,26 @@ class Tuple
 public:
     RWLock lock_;
     RWLock lock_for_lock_;
-    uint64_t upper;
-    uint64_t lower;
     std::vector<uint64_t> wait_list_;
     uint64_t value_;
-    Tuple() : upper(1), lower(1), wait_list_(100, 0) {}
 
     void wait_add(uint64_t tx_id)
     {
-    READ_WAIT_LIST:
-        if (lock_for_lock_.w_try_lock())
+    ADD_RETRY:
+        if (!lock_for_lock_.w_try_lock())
         {
-            __atomic_store_n(&wait_list_[upper], tx_id, __ATOMIC_SEQ_CST);
-            __atomic_store_n(&upper, upper + 1, __ATOMIC_SEQ_CST);
-            if (upper >= WAIT_LIST_SIZE)
-            {
-                std::cout << "wait list size over" << std::endl;
-                return;
-            }
-            lock_for_lock_.w_unlock();
+            goto ADD_RETRY;
         }
         else
         {
-            goto READ_WAIT_LIST;
+            if (wait_list_.size() > 1)
+            {
+                if (wait_list_[wait_list_.size() - 1] == tx_id)
+                    std::cout << "alert" << tx_id << std::endl;
+            }
+
+            wait_list_.emplace_back(tx_id);
+            lock_for_lock_.w_unlock();
         }
     }
 };
@@ -221,7 +217,6 @@ public:
 
     void write(const uint64_t key)
     {
-
         Tuple *tuple = &Table[key];
         __atomic_store_n(&tuple->value_, 100, __ATOMIC_SEQ_CST);
         write_set_.emplace_back(key, 100, tuple);
@@ -294,7 +289,7 @@ public:
 
 void lockmanager_regist(Transaction &trans, uint64_t tx_id, int thread_id)
 {                    // lock取りに行って、取れなかったらlock managerに登録するフェーズ
-    int ope_pos = 0; //オペレーションがtx中で何番目かを示す
+    int ope_pos = 0; //オペレーションがtx中で何番目かを示す dup_check用
     for (auto item = trans.task_set_.begin(); item != trans.task_set_.end();)
     {
         // search tuple
@@ -307,42 +302,27 @@ void lockmanager_regist(Transaction &trans, uint64_t tx_id, int thread_id)
             {
                 //既に同一トランザクション内で同じデータアイテムに対して、Read/Writeを行なっている
                 // std::cout << item->key_ << "read dup" << thread_id << std::endl;
-                // item = trans.task_set_.erase(item);
-                // item++;
-                // break;
             }
             else
             {
                 tuple->wait_add(tx_id);
-                trans.future_lock_.emplace_back(item->ope_, item->key_);
+                trans.future_lock_.emplace_back(Ope::READ, item->key_);
             }
 
             item++;
             break;
         case Ope::WRITE:
-            if (trans.dup_check(item->key_, ope_pos) == 0)
-            {
-                //既に同一トランザクション内で同じデータアイテムに対して、Readを行なっている
-                // std::cout << item->key_ << "upgrade dup" << thread_id << std::endl;
-                // upgrade
-                tuple->wait_add(tx_id);
-                trans.future_lock_.emplace_back(item->ope_, item->key_);
-                // item++;
-                // break;
-            }
-            else if (trans.dup_check(item->key_, ope_pos) == 1)
+            if (trans.dup_check(item->key_, ope_pos) == 1)
             {
                 //既に同一トランザクション内で同じデータアイテムに対して、Writeを行なっている
                 // std::cout << item->key_ << "write dup" << thread_id << std::endl;
-                // item = trans.task_set_.erase(item);
-                // item++;
-                // break;
             }
             else
             {
-                // lock_wait に追加
+                // upgrade or normal write
+                //  lock_wait に追加
                 tuple->wait_add(tx_id);
-                trans.future_lock_.emplace_back(item->ope_, item->key_);
+                trans.future_lock_.emplace_back(Ope::WRITE, item->key_);
             }
             item++;
             break;
@@ -352,30 +332,30 @@ void lockmanager_regist(Transaction &trans, uint64_t tx_id, int thread_id)
             break;
         default:
             std::cout << "lock logical error" << std::endl;
-            break;
+            exit(0);
         }
         ope_pos++;
     }
 }
 
-void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const bool &quit)
+bool check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const bool &quit)
 {
     while (trans.future_lock_.size() > 0)
     {
         if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
-            break;
-
+            return false;
         for (auto item = trans.future_lock_.begin(); item != trans.future_lock_.end();)
         {
-            // std::cout << trans.future_lock_.size() << ":" << item->key_ << std::endl;
+            // std::cout << trans.future_lock_.size() << ":" << thread_id << std::endl;
             int count = 0; // upgrade read lock削除用
             bool dup_flag = false;
             Tuple *tuple = &Table[item->key_];
-            if (tx_id == __atomic_load_n(&tuple->wait_list_[tuple->lower], __ATOMIC_SEQ_CST))
+            if (tx_id == __atomic_load_n(&tuple->wait_list_[0], __ATOMIC_SEQ_CST))
             {
                 if (!tuple->lock_for_lock_.w_try_lock())
                 {
                     // retry
+                    std::cout << item->key_ << ":" << tx_id << std::endl;
                     item++;
                 }
                 else
@@ -385,13 +365,16 @@ void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const boo
                     case Ope::READ:
                         if (!tuple->lock_.r_try_lock())
                         {
-                            // retry
+                            //  retry
+                            // std::cout << "read lock" << std::endl;
+                            // std::cout << thread_id << "read" << item->key_ << std::endl;
                             item++;
                         }
                         else
                         {
+                            // std::cout << item->key_ << ":" << thread_id << std::endl;
                             item = trans.future_lock_.erase(item);
-                            __atomic_store_n(&tuple->lower, tuple->lower + 1, __ATOMIC_SEQ_CST);
+                            tuple->wait_list_.erase(tuple->wait_list_.begin());
                             trans.r_lock_list_.emplace_back(&tuple->lock_);
                         }
                         break;
@@ -404,17 +387,29 @@ void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const boo
                             {
                                 // std::cout << item->key_ << "upgrade" << thread_id << std::endl;
                                 // delete from task_set and upgrade
-                                if (!tuple->lock_.try_upgrade())
+                                if (tx_id == __atomic_load_n(&tuple->wait_list_[1], __ATOMIC_SEQ_CST))
                                 {
-                                    // retry
-                                    item++;
+                                    // read-write-write事案を避けたい
+                                    item = trans.future_lock_.erase(item);
+                                    tuple->wait_list_.erase(tuple->wait_list_.begin());
                                 }
                                 else
                                 {
-                                    trans.w_lock_list_.emplace_back(&tuple->lock_);
-                                    item = trans.future_lock_.erase(item);
-                                    __atomic_store_n(&tuple->lower, tuple->lower + 1, __ATOMIC_SEQ_CST);
-                                    trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
+                                    if (!tuple->lock_.try_upgrade())
+                                    {
+                                        // retry
+                                        // std::cout << "upgrade lock" << std::endl;
+                                        // std::cout << thread_id << "upgrade" << item->key_ << std::endl;
+                                        item++;
+                                    }
+                                    else
+                                    {
+                                        // std::cout << item->key_ << ":" << thread_id << std::endl;
+                                        trans.w_lock_list_.emplace_back(&tuple->lock_);
+                                        item = trans.future_lock_.erase(item);
+                                        tuple->wait_list_.erase(tuple->wait_list_.begin());
+                                        trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
+                                    }
                                 }
                                 dup_flag = true;
                                 break;
@@ -425,8 +420,10 @@ void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const boo
                             break;
                         }
 
-                        if (tx_id == __atomic_load_n(&tuple->wait_list_[tuple->lower + 1], __ATOMIC_SEQ_CST))
+                        if (tx_id == __atomic_load_n(&tuple->wait_list_[1], __ATOMIC_SEQ_CST))
                         {
+                            // read-writeのupgradeでwriteを先にロック取るのを防ぐ
+                            // std::cout << item->key_ << ":" << thread_id << ":" << tuple->wait_list_[0] << ":" << tuple->wait_list_[1] << std::endl;
                             item++;
                             break;
                         }
@@ -434,12 +431,15 @@ void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const boo
                         if (!tuple->lock_.w_try_lock())
                         {
                             // retry
+                            // std::cout << "write lock" << std::endl;
+                            // std::cout << thread_id << "write" << item->key_ << std::endl;
                             item++;
                         }
                         else
                         {
+                            // std::cout << item->key_ << ":" << thread_id << std::endl;
                             item = trans.future_lock_.erase(item);
-                            __atomic_store_n(&tuple->lower, tuple->lower + 1, __ATOMIC_SEQ_CST);
+                            tuple->wait_list_.erase(tuple->wait_list_.begin());
                             trans.w_lock_list_.emplace_back(&tuple->lock_);
                         }
                         break;
@@ -456,6 +456,7 @@ void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const boo
             }
         }
     }
+    return true;
 }
 
 void makeTask(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
@@ -471,16 +472,19 @@ void makeTask(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
         {
             tasks.emplace_back(Ope::SLEEP, 0);
         }
-
-        if ((rnd.next() % 100) < RW_RATE)
-        {
-            // std::cout << "read" << std::endl;
-            tasks.emplace_back(Ope::READ, random_gen_key);
-        }
         else
         {
-            // std::cout << "write" << std::endl;
-            tasks.emplace_back(Ope::WRITE, random_gen_key);
+
+            if ((rnd.next() % 100) < RW_RATE)
+            {
+                // std::cout << "read" << std::endl;
+                tasks.emplace_back(Ope::READ, random_gen_key + 1);
+            }
+            else
+            {
+                // std::cout << "write" << std::endl;
+                tasks.emplace_back(Ope::WRITE, random_gen_key + 1);
+            }
         }
     }
 }
@@ -491,12 +495,6 @@ void makeDB()
     for (int i = 0; i < TUPLE_NUM; i++)
     {
         Table[i].value_ = 0;
-        Table[i].upper = 0;
-        Table[i].lower = 0;
-        for (int j = 0; j < WAIT_LIST_SIZE; j++)
-        {
-            Table[i].wait_list_.push_back(0);
-        }
     }
 }
 
@@ -537,15 +535,35 @@ GIANT_RETRY:
         trans.task_set_ = work_tx.task_set_;
 
         trans.begin();
+
+        // std::cout << trans.task_set_.size() << "g" << std::endl;
         // std::cout << "1.5" << thread_id << std::endl;
         // lock_managerに登録
         lockmanager_regist(trans, tx_id, thread_id);
         // std::cout << "2" << thread_id << std::endl;
 
+        // for (auto &item : trans.future_lock_)
+        // {
+        //     switch (item.ope_)
+        //     {
+        //     case Ope::READ:
+        //         std::cout << item.key_ << "read" << thread_id << std::endl;
+        //         break;
+        //     case Ope::WRITE:
+        //         std::cout << item.key_ << "write" << thread_id << std::endl;
+        //         break;
+        //     default:
+        //         std::cout << "fail" << std::endl;
+        //         break;
+        //     }
+        // }
+
         // release giant lock
         giant_lock.w_unlock();
 
-        check_waitlist(trans, tx_id, thread_id, quit);
+        // std::cout << trans.future_lock_.size() << "ga" << std::endl;
+
+        bool end = check_waitlist(trans, tx_id, thread_id, quit);
 
         // std::cout << "3" << thread_id << std::endl;
 
@@ -570,11 +588,60 @@ GIANT_RETRY:
                 break;
             }
         }
-        trans.commit();
-        myres.commit_cnt_++;
-
+        if (end)
+        {
+            trans.commit();
+            myres.commit_cnt_++;
+        }
         // std::cout << "4" << thread_id << std::endl;
     }
+
+GIANT_RE:
+
+    // aquire giant lock
+    if (!giant_lock.w_try_lock())
+    {
+        goto GIANT_RE;
+    }
+    std::cout << thread_id << ":" << trans.future_lock_.size() << ":" << myres.commit_cnt_ << std::endl;
+    for (int i = 0; i < trans.future_lock_.size(); i++)
+    {
+        switch (trans.future_lock_[i].ope_)
+        {
+        case Ope::READ:
+            std::cout << Table[trans.future_lock_[i].key_].wait_list_[0] << "read" << trans.future_lock_[i].key_ << ":" << tx_id << ":" << Table[trans.future_lock_[i].key_].lock_.counter << ":" << Table[trans.future_lock_[i].key_].lock_for_lock_.counter << std::endl;
+            break;
+        case Ope::WRITE:
+            std::cout << Table[trans.future_lock_[i].key_].wait_list_[0] << "write" << trans.future_lock_[i].key_ << ":" << tx_id << ":" << Table[trans.future_lock_[i].key_].lock_.counter << ":" << Table[trans.future_lock_[i].key_].lock_for_lock_.counter << std::endl;
+            break;
+        case Ope::SLEEP:
+            std::cout << "sleep" << trans.future_lock_[i].key_ << std::endl;
+            break;
+        default:
+            std::cout << "fail" << std::endl;
+            break;
+        }
+    }
+    std::cout << "already have" << std::endl;
+    for (int i = 0; i < trans.task_set_.size(); i++)
+    {
+        switch (trans.task_set_[i].ope_)
+        {
+        case Ope::READ:
+            std::cout << "read" << trans.task_set_[i].key_ << std::endl;
+            break;
+        case Ope::WRITE:
+            std::cout << "write" << trans.task_set_[i].key_ << std::endl;
+            break;
+        case Ope::SLEEP:
+            std::cout << "sleep" << trans.task_set_[i].key_ << std::endl;
+            break;
+        default:
+            std::cout << "fail" << std::endl;
+            break;
+        }
+    }
+    giant_lock.w_unlock();
 }
 
 int main(int argc, char *argv[])
@@ -582,11 +649,11 @@ int main(int argc, char *argv[])
 
     // initilize rnd and zipf
     Xoroshiro128Plus rnd;
-    FastZipf zipf(&rnd, SKEW_PAR, TUPLE_NUM);
+    FastZipf zipf(&rnd, SKEW_PAR, TUPLE_NUM - 1);
 
     makeDB();
 
-    tx_counter = 0;
+    tx_counter = 1;
 
     // Tuple *tuple = &Table[5];
 

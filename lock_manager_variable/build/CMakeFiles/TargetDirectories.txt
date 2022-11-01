@@ -1,0 +1,3 @@
+/home/ccbench/lock_manager_variable/build/CMakeFiles/rebuild_cache.dir
+/home/ccbench/lock_manager_variable/build/CMakeFiles/ss2pl.exe.dir
+/home/ccbench/lock_manager_variable/build/CMakeFiles/edit_cache.dir
