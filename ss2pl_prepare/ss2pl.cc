@@ -11,15 +11,15 @@
 #include <algorithm>
 
 #define PAGE_SIZE 4096
-#define THREAD_NUM 10
-#define TUPLE_NUM 100000
-#define MAX_OPE 50
-#define SLEEP_POS 8
+#define THREAD_NUM 4
+#define TUPLE_NUM 1000000
+#define MAX_OPE 100
+#define SLEEP_POS 10
 #define RW_RATE 50
 #define EX_TIME 3
-#define PRE_NUM 50000
-#define SLEEP_TIME 1000
-#define SKEW_PAR 0.9
+#define PRE_NUM 300000
+#define SLEEP_TIME 100
+#define SKEW_PAR 0.0
 
 // DEFINE_uint64(tuple_num, 1000000, "Total number of records");
 

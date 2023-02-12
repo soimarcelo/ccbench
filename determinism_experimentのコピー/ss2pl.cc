@@ -12,15 +12,14 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 4
-#define TUPLE_NUM 1000000
+#define TUPLE_NUM 100000
 #define MAX_OPE 100
-#define SLEEP_POS 10
+#define SLEEP_POS 90
 #define RW_RATE 50
 #define EX_TIME 3
 #define PRE_NUM 300000
 #define SLEEP_TIME 100
-#define SLEEP_TIME_INIT 1000 * 1000 * 3
-#define SKEW_PAR 0.0
+#define SKEW_PAR 0.5
 
 uint64_t tx_counter;
 
@@ -275,15 +274,6 @@ void makeTask(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
     }
 }
 
-void makeTask_init(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
-{
-    tasks.clear();
-    uint64_t random_gen_key = zipf() % 1;
-    // std::cout << random_gen_key << std::endl;
-    tasks.emplace_back(Ope::WRITE, 1);
-    tasks.emplace_back(Ope::SLEEP, 0);
-}
-
 void makeDB()
 {
     posix_memalign((void **)&Table, PAGE_SIZE, TUPLE_NUM * sizeof(Tuple));
@@ -469,15 +459,8 @@ POINT:
                 // std::cout << "write" << std::endl;
                 break;
             case Ope::SLEEP:
-                if (tx_pos == 0 || tx_pos == 1)
-                {
-                    std::cout << tx_pos << std::endl;
-                    std::this_thread::sleep_for(std::chrono::microseconds(SLEEP_TIME_INIT));
-                }
-                else
-                {
-                    std::this_thread::sleep_for(std::chrono::microseconds(SLEEP_TIME));
-                }
+                // std::cout << "sleeping" << std::endl;
+                std::this_thread::sleep_for(std::chrono::microseconds(SLEEP_TIME));
                 break;
             default:
                 std::cout << "fail" << std::endl;
@@ -506,18 +489,9 @@ int main(int argc, char *argv[])
     bool quit = false;
 
     // transaction generate
-    int tx_make_count = 0;
     for (auto &pre : Pre_tx_set)
     {
-        if (tx_make_count == 0 || tx_make_count == 1)
-        {
-            makeTask_init(pre.task_set_, rnd, zipf);
-        }
-        else
-        {
-            makeTask(pre.task_set_, rnd, zipf);
-        }
-        tx_make_count++;
+        makeTask(pre.task_set_, rnd, zipf);
     }
 
     std::vector<int> readys;

@@ -1,0 +1,55 @@
+Determining if the pthread_create exist failed with the following output:
+Change Dir: /home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_01fa7/fast"
+/usr/bin/make -f CMakeFiles/cmTC_01fa7.dir/build.make CMakeFiles/cmTC_01fa7.dir/build
+make[1]: Entering directory '/home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_01fa7.dir/CheckSymbolExists.cxx.o
+/usr/bin/c++    -std=gnu++1z -o CMakeFiles/cmTC_01fa7.dir/CheckSymbolExists.cxx.o -c /home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp/CheckSymbolExists.cxx
+Linking CXX executable cmTC_01fa7
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_01fa7.dir/link.txt --verbose=1
+/usr/bin/c++       CMakeFiles/cmTC_01fa7.dir/CheckSymbolExists.cxx.o  -o cmTC_01fa7 
+CMakeFiles/cmTC_01fa7.dir/CheckSymbolExists.cxx.o: In function `main':
+CheckSymbolExists.cxx:(.text+0x1b): undefined reference to `pthread_create'
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_01fa7.dir/build.make:97: recipe for target 'cmTC_01fa7' failed
+make[1]: *** [cmTC_01fa7] Error 1
+make[1]: Leaving directory '/home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp'
+Makefile:126: recipe for target 'cmTC_01fa7/fast' failed
+make: *** [cmTC_01fa7/fast] Error 2
+
+File /home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp/CheckSymbolExists.cxx:
+/* */
+#include <pthread.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef pthread_create
+  return ((int*)(&pthread_create))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_043ee/fast"
+/usr/bin/make -f CMakeFiles/cmTC_043ee.dir/build.make CMakeFiles/cmTC_043ee.dir/build
+make[1]: Entering directory '/home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_043ee.dir/CheckFunctionExists.cxx.o
+/usr/bin/c++    -DCHECK_FUNCTION_EXISTS=pthread_create   -std=gnu++1z -o CMakeFiles/cmTC_043ee.dir/CheckFunctionExists.cxx.o -c /home/ccbench/ss2pl_experiment/build/CMakeFiles/CheckLibraryExists/CheckFunctionExists.cxx
+Linking CXX executable cmTC_043ee
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_043ee.dir/link.txt --verbose=1
+/usr/bin/c++   -DCHECK_FUNCTION_EXISTS=pthread_create    CMakeFiles/cmTC_043ee.dir/CheckFunctionExists.cxx.o  -o cmTC_043ee -lpthreads 
+/usr/bin/ld: cannot find -lpthreads
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_043ee.dir/build.make:97: recipe for target 'cmTC_043ee' failed
+make[1]: *** [cmTC_043ee] Error 1
+make[1]: Leaving directory '/home/ccbench/ss2pl_experiment/build/CMakeFiles/CMakeTmp'
+Makefile:126: recipe for target 'cmTC_043ee/fast' failed
+make: *** [cmTC_043ee/fast] Error 2
+
+

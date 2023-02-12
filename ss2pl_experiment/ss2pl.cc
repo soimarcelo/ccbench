@@ -22,8 +22,6 @@
 #define SLEEP_TIME_INIT 1000 * 1000 * 3
 #define SKEW_PAR 0.0
 
-uint64_t tx_counter;
-
 // DEFINE_uint64(tuple_num, 1000000, "Total number of records");
 
 class Result
@@ -112,6 +110,25 @@ public:
         }
     }
 
+    void
+    upgrade()
+    {
+        int expected, desired(-1);
+        expected = counter.load(std::memory_order_acquire);
+        for (;;)
+        {
+            if (expected != 1)
+            {
+                expected = counter.load(std::memory_order_acquire);
+                continue;
+            }
+
+            if (counter.compare_exchange_strong(
+                    expected, desired, std::memory_order_acq_rel, std::memory_order_acquire))
+                return;
+        }
+    }
+
     void r_unlock()
     {
         counter--;
@@ -121,8 +138,6 @@ public:
         counter++;
     }
 };
-
-RWLock lock_for_locks;
 
 class Tuple
 {
@@ -182,36 +197,101 @@ public:
     void read(const uint64_t key)
     {
 
+        for (auto &itr : write_set_)
+        {
+            if (itr.key_ == key)
+            {
+                // std::cout << "read-write" << std::endl;
+                return;
+            }
+        }
+        for (auto &itr : read_set_)
+        {
+            if (itr.key_ == key)
+            {
+                // std::cout << "read-read" << std::endl;
+                return;
+            }
+        }
         Tuple *tuple = &Table[key];
 
+        if (!tuple->lock_.r_try_lock())
+        {
+            status_ = Status::ABORTED;
+            // std::cout << "read abort" << key << std::endl;
+            return;
+        }
         // tuple->lock_.read_lock();
+        r_lock_list_.emplace_back(&tuple->lock_);
 
         uint64_t read_value = __atomic_load_n(&tuple->value_, __ATOMIC_SEQ_CST);
         read_set_.emplace_back(key, read_value, tuple);
-        // if (tuple->lock_.counter != -1)
-        // {
-        //     tuple->lock_.r_unlock();
-        // }
         return;
     }
-
     void write(const uint64_t key)
     {
 
+        for (auto &itr : write_set_)
+        {
+            if (itr.key_ == key)
+            {
+                // std::cout << "write-write" << std::endl;
+                return;
+            }
+        }
+
+        for (auto itr = read_set_.begin(); itr != read_set_.end(); ++itr)
+        {
+            if ((*itr).key_ == key)
+            {
+                // std::cout << "read-write" << std::endl;
+                // (*itr).tuple_->lock_.upgrade();
+                if (!(*itr).tuple_->lock_.try_upgrade())
+                {
+                    // std::cout << "upgrade abort" << key << std::endl;
+                    status_ = Status::ABORTED;
+                    return;
+                }
+                else
+                {
+                    // std::cout << "upgrade success" << std::endl;
+                    for (auto lock_itr = r_lock_list_.begin(); lock_itr != r_lock_list_.end(); ++lock_itr)
+                    {
+                        if (*lock_itr == &((*itr).tuple_->lock_))
+                        {
+                            // __atomic_store_n((*itr).tuple_->value_, 100, __ATOMIC_SEQ_CST);
+                            write_set_.emplace_back(key, 100, (*itr).tuple_);
+                            w_lock_list_.emplace_back(&(*itr).tuple_->lock_);
+                            r_lock_list_.erase(lock_itr);
+                            break;
+                        }
+                    }
+
+                    read_set_.erase(itr);
+                    return;
+                }
+            }
+        }
         Tuple *tuple = &Table[key];
+
+        if (!tuple->lock_.w_try_lock())
+        {
+            status_ = Status::ABORTED;
+            // std::cout << "write abort" << key << std::endl;
+            return;
+        }
+        // tuple->lock_.write_lock();
+        w_lock_list_.emplace_back(&tuple->lock_);
 
         __atomic_store_n(&tuple->value_, 100, __ATOMIC_SEQ_CST);
         write_set_.emplace_back(key, 100, tuple);
-        // tuple->lock_.w_unlock();
         return;
     }
-
     void begin()
     {
         status_ = Status::IN_FLIGHT;
         return;
     }
-
     void commit()
     {
         for (auto &lock : r_lock_list_)
@@ -263,6 +343,7 @@ void makeTask(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
         }
         else
         {
+
             if ((rnd.next() % 100) < RW_RATE)
             {
                 tasks.emplace_back(Ope::READ, random_gen_key + 1);
@@ -298,7 +379,7 @@ void worker(int thread_id, int &ready, const bool &start, const bool &quit)
     Result &myres = std::ref(AllResult[thread_id]);
 
     Transaction trans;
-    uint64_t tx_pos;
+    uint64_t tx_pos = PRE_NUM / THREAD_NUM * thread_id;
 
     __atomic_store_n(&ready, 1, __ATOMIC_SEQ_CST);
 
@@ -306,156 +387,17 @@ void worker(int thread_id, int &ready, const bool &start, const bool &quit)
     {
     }
 
-POINT:
-
     while (!__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
     {
-
-        // aquire giant lock
-        if (!lock_for_locks.w_try_lock())
-        {
-            goto POINT;
-        }
-
-        // 取得すべきtxの現在地　ロック必要か
-        tx_pos = __atomic_load_n(&tx_counter, __ATOMIC_SEQ_CST);
-        if (tx_pos >= PRE_NUM)
-        {
-            return;
-        }
+        // makeTask(trans.task_set_, rnd, zipf);
+        Pre &work_tx = std::ref(Pre_tx_set[tx_pos]);
+        trans.task_set_ = work_tx.task_set_;
+        tx_pos++;
 
     RETRY:
         if (__atomic_load_n(&quit, __ATOMIC_SEQ_CST))
             break;
-
-        // pre_tx_setからコピー
-        Pre &work_tx = std::ref(Pre_tx_set[tx_pos]);
-        trans.task_set_ = work_tx.task_set_;
-        // uint64_t operation_count = 0;
-
         trans.begin();
-        // request all locks
-        for (auto &item : trans.task_set_)
-        {
-            // search tuple
-            Tuple *tuple = &Table[item.key_];
-            // if the item has been alredy read or writen in the tx, skip the ope or upgrade the lock
-
-            int count = 0;
-            bool dup_flag = false;
-            // check r_lock_list_ and w_lock_list_
-            switch (item.ope_)
-            {
-            case Ope::READ:
-                for (auto &r_lock : trans.r_lock_list_)
-                {
-                    count++;
-                    if (r_lock == &tuple->lock_)
-                    {
-                        // delete from task.set
-                        // trans.task_set_.erase(trans.task_set_.begin() + operation_count);
-                        // trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
-
-                        dup_flag = true;
-                        break;
-                    }
-                }
-                for (auto &w_lock : trans.w_lock_list_)
-                {
-                    count++;
-                    if (w_lock == &tuple->lock_)
-                    {
-                        // delete from task.set
-                        // trans.task_set_.erase(trans.task_set_.begin() + operation_count);
-                        // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
-                        dup_flag = true;
-                        break;
-                    }
-                }
-                if (dup_flag)
-                {
-                    break;
-                }
-                if (!tuple->lock_.r_try_lock())
-                {
-                    trans.status_ = Status::ABORTED;
-                }
-                else
-                {
-                    // std::cout << "read lock" << std::endl;
-                    // operation_count++;
-                    trans.r_lock_list_.emplace_back(&tuple->lock_);
-                }
-                break;
-            case Ope::WRITE:
-                for (auto r_lock : trans.r_lock_list_)
-                {
-                    count++;
-                    if (&tuple->lock_ == r_lock)
-                    {
-                        // delete from task_set and upgrade
-                        if (!tuple->lock_.try_upgrade())
-                        {
-                            // abort
-                            trans.status_ = Status::ABORTED;
-                        }
-                        else
-                        {
-                            // operation_count++;
-                            trans.w_lock_list_.emplace_back(&tuple->lock_);
-                            // std::cout << "upgrade lock" << std::endl;
-                            // delete from read sets
-                            trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
-                        }
-                        break;
-                    }
-                }
-                for (auto w_lock : trans.w_lock_list_)
-                {
-                    count++;
-                    if (&tuple->lock_ == w_lock)
-                    {
-                        // trans.task_set_.erase(trans.task_set_.begin() + operation_count);
-                        // trans.w_lock_list_.erase(trans.w_lock_list_.begin() + count - 1);
-                        dup_flag = true;
-                        break;
-                    }
-                }
-                if (dup_flag)
-                {
-                    break;
-                }
-                if (!tuple->lock_.w_try_lock())
-                {
-                    trans.status_ = Status::ABORTED;
-                }
-                else
-                {
-                    // std::cout << "write lock" << std::endl;
-                    // operation_count++;
-                    trans.w_lock_list_.emplace_back(&tuple->lock_);
-                }
-                break;
-            case Ope::SLEEP:
-                // operation_count++;
-                break;
-            default:
-                std::cout << "lock logical error" << std::endl;
-                break;
-            }
-            if (trans.status_ == Status::ABORTED)
-            {
-                trans.abort();
-                // std::cout << "abort" << std::endl;
-                goto RETRY;
-            }
-        }
-
-        __atomic_store_n(&tx_counter, tx_pos + 1, __ATOMIC_SEQ_CST);
-
-        // release giant lock
-        lock_for_locks.w_unlock();
-
         for (auto &task : trans.task_set_)
         {
             switch (task.ope_)
@@ -469,9 +411,9 @@ POINT:
                 // std::cout << "write" << std::endl;
                 break;
             case Ope::SLEEP:
-                if (tx_pos == 0 || tx_pos == 1)
+                if (tx_pos == PRE_NUM / THREAD_NUM * 2 + 1 || tx_pos == PRE_NUM / THREAD_NUM + 1)
                 {
-                    std::cout << tx_pos << std::endl;
+                    // std::cout << tx_pos << std::endl;
                     std::this_thread::sleep_for(std::chrono::microseconds(SLEEP_TIME_INIT));
                 }
                 else
@@ -482,6 +424,13 @@ POINT:
             default:
                 std::cout << "fail" << std::endl;
                 break;
+            }
+
+            if (trans.status_ == Status::ABORTED)
+            {
+                trans.abort();
+                // std::cout << "abort" << std::endl;
+                goto RETRY;
             }
         }
         trans.commit();
@@ -494,22 +443,18 @@ int main(int argc, char *argv[])
     // gflags::ParseCommandLineFlags(&argc, &argv, true);
     // std::cout << "#FLAGS_tuple_num" << FLAGS_tuple_num << "\n";
 
-    // initilize rnd and zipf
     Xoroshiro128Plus rnd;
     FastZipf zipf(&rnd, SKEW_PAR, TUPLE_NUM);
 
     makeDB();
 
-    tx_counter = 0;
-
     bool start = false;
     bool quit = false;
 
-    // transaction generate
     int tx_make_count = 0;
     for (auto &pre : Pre_tx_set)
     {
-        if (tx_make_count == 0 || tx_make_count == 1)
+        if (tx_make_count == PRE_NUM / THREAD_NUM * 2 || tx_make_count == PRE_NUM / THREAD_NUM)
         {
             makeTask_init(pre.task_set_, rnd, zipf);
         }

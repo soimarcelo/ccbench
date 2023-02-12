@@ -12,14 +12,15 @@
 
 #define PAGE_SIZE 4096
 #define THREAD_NUM 4
-#define TUPLE_NUM 100000
+#define TUPLE_NUM 1000000
 #define MAX_OPE 100
 #define SLEEP_POS 10
 #define RW_RATE 50
 #define EX_TIME 3
 #define PRE_NUM 300000
 #define SLEEP_TIME 100
-#define SKEW_PAR 0.5
+#define SLEEP_TIME_INIT 1000 * 1000 * 3
+#define SKEW_PAR 0.0
 
 uint64_t tx_counter;
 
@@ -278,7 +279,7 @@ public:
 
 void lockmanager_regist(Transaction &trans, uint64_t tx_id, int thread_id)
 {                    // 全てlock managerに登録するフェーズ
-    int ope_pos = 0; //オペレーションがtx中で何番目かを示す 関数dup_check用
+    int ope_pos = 0; // オペレーションがtx中で何番目かを示す 関数dup_check用
     for (auto item = trans.task_set_.begin(); item != trans.task_set_.end();)
     {
         // search tuple
@@ -290,8 +291,8 @@ void lockmanager_regist(Transaction &trans, uint64_t tx_id, int thread_id)
         case Ope::READ:
             if (trans.dup_check(item->key_, ope_pos) > -1)
             {
-                //既に同一トランザクション内で同じデータアイテムに対して、Read/Writeを行なっている
-                // read-read:0, read-write:1
+                // 既に同一トランザクション内で同じデータアイテムに対して、Read/Writeを行なっている
+                //  read-read:0, read-write:1
             }
             else
             {
@@ -305,8 +306,8 @@ void lockmanager_regist(Transaction &trans, uint64_t tx_id, int thread_id)
             ret = trans.dup_check(item->key_, ope_pos);
             if (ret == 1)
             {
-                //既に同一トランザクション内で同じデータアイテムに対して、Writeを行なっている
-                // write-write:1
+                // 既に同一トランザクション内で同じデータアイテムに対して、Writeを行なっている
+                //  write-write:1
             }
             else if (ret == 0)
             {
@@ -368,75 +369,29 @@ void check_waitlist(Transaction &trans, uint64_t tx_id, int thread_id, const boo
                     case Ope::READ:
                         if (!tuple->lock_.r_try_lock())
                         {
-                            //レコードのreadロックが取れない
-                            //  retry
+                            // レコードのreadロックが取れない
+                            //   retry
                             item++;
                         }
                         else
                         {
-                            //レコードのreadロックが取れる
+                            // レコードのreadロックが取れる
                             item = trans.future_lock_.erase(item);
                             tuple->wait_list_.erase(tuple->wait_list_.begin());
                             trans.r_lock_list_.emplace_back(&tuple->lock_);
                         }
                         break;
                     case Ope::WRITE:
-                        // // upgradeかどうか
-                        // for (auto r_lock : trans.r_lock_list_)
-                        // {
-                        //     count++;
-                        //     if (&tuple->lock_ == r_lock)
-                        //     {
-                        //         // delete from task_set and upgrade
-                        //         if (tx_id == __atomic_load_n(&tuple->wait_list_[1], __ATOMIC_SEQ_CST))
-                        //         {
-                        //             // read-write-write事案を避けたい
-                        //             item = trans.future_lock_.erase(item);
-                        //             tuple->wait_list_.erase(tuple->wait_list_.begin());
-                        //         }
-                        //         else
-                        //         {
-                        //             if (!tuple->lock_.try_upgrade())
-                        //             {
-                        //                 //レコードのupgradeロックが取れない
-                        //                 // retry
-                        //                 item++;
-                        //             }
-                        //             else
-                        //             {
-                        //                 //レコードのupgradeロックが取れる
-                        //                 trans.w_lock_list_.emplace_back(&tuple->lock_);
-                        //                 item = trans.future_lock_.erase(item);
-                        //                 tuple->wait_list_.erase(tuple->wait_list_.begin());
-                        //                 trans.r_lock_list_.erase(trans.r_lock_list_.begin() + count - 1);
-                        //             }
-                        //         }
-                        //         dup_flag = true;
-                        //         break;
-                        //     }
-                        // }
-                        // if (dup_flag)
-                        // {
-                        //     break;
-                        // }
-
-                        // if (tx_id == __atomic_load_n(&tuple->wait_list_[1], __ATOMIC_SEQ_CST))
-                        // {
-                        //     // read-writeのupgradeでwriteを先にロック取るのを防ぐ
-                        //     item++;
-                        //     break;
-                        // }
-
                         // 以下、txが初めてアクセスするレコードに対するwrite(normal write)
                         if (!tuple->lock_.w_try_lock())
                         {
-                            //レコードのwriteロックが取れない
-                            // retry
+                            // レコードのwriteロックが取れない
+                            //  retry
                             item++;
                         }
                         else
                         {
-                            //レコードのwriteロックが取れる
+                            // レコードのwriteロックが取れる
                             item = trans.future_lock_.erase(item);
                             tuple->wait_list_.erase(tuple->wait_list_.begin());
                             trans.w_lock_list_.emplace_back(&tuple->lock_);
@@ -486,6 +441,26 @@ void makeTask(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
     }
 }
 
+void makeTask_init(std::vector<Task> &tasks, Xoroshiro128Plus &rnd, FastZipf &zipf)
+{
+    tasks.clear();
+    for (size_t i = 0; i < 10; ++i)
+    {
+        uint64_t random_gen_key = zipf() % 1;
+        // std::cout << random_gen_key << std::endl;
+        assert(random_gen_key < TUPLE_NUM);
+
+        if (i == 9)
+        {
+            tasks.emplace_back(Ope::SLEEP, 0);
+        }
+        else
+        {
+            tasks.emplace_back(Ope::WRITE, random_gen_key + 1);
+        }
+    }
+}
+
 void makeDB()
 {
     posix_memalign((void **)&Table, PAGE_SIZE, TUPLE_NUM * sizeof(Tuple));
@@ -518,7 +493,7 @@ GIANT_RETRY:
             goto GIANT_RETRY;
         }
 
-        //取得すべきtxの現在地　ロック必要か
+        // 取得すべきtxの現在地　ロック必要か
         tx_id = __atomic_load_n(&tx_counter, __ATOMIC_SEQ_CST);
         if (tx_id >= PRE_NUM)
         {
@@ -551,7 +526,15 @@ GIANT_RETRY:
                 trans.write(task.key_);
                 break;
             case Ope::SLEEP:
-                std::this_thread::sleep_for(std::chrono::microseconds(SLEEP_TIME));
+                if (tx_id == 1 || tx_id == 2)
+                {
+                    std::cout << tx_id << std::endl;
+                    std::this_thread::sleep_for(std::chrono::microseconds(SLEEP_TIME_INIT));
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::microseconds(SLEEP_TIME));
+                }
                 break;
             default:
                 std::cout << "fail" << std::endl;
@@ -578,9 +561,18 @@ int main(int argc, char *argv[])
     bool quit = false;
 
     // transaction generate
+    int tx_make_count = 0;
     for (auto &pre : Pre_tx_set)
     {
-        makeTask(pre.task_set_, rnd, zipf);
+        if (tx_make_count == 0 || tx_make_count == 1)
+        {
+            makeTask_init(pre.task_set_, rnd, zipf);
+        }
+        else
+        {
+            makeTask(pre.task_set_, rnd, zipf);
+        }
+        tx_make_count++;
     }
 
     std::vector<int> readys;
