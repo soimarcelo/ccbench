@@ -1,7 +1,8 @@
 file(REMOVE_RECURSE
   "CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o"
-  "ss2pl.exe.pdb"
+  "CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o.d"
   "ss2pl.exe"
+  "ss2pl.exe.pdb"
 )
 
 # Per-language clean rules from dependency scanning.

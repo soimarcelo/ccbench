@@ -57,10 +57,10 @@ RM = /opt/homebrew/Cellar/cmake/3.30.0/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/soimarcelo/projects/ccbench/fair_determinism
+CMAKE_SOURCE_DIR = /Users/soimarcelo/projects/ccbench/fair_determinism/logging
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/soimarcelo/projects/ccbench/fair_determinism/build
+CMAKE_BINARY_DIR = /Users/soimarcelo/projects/ccbench/fair_determinism/logging/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -87,9 +87,9 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/soimarcelo/projects/ccbench/fair_determinism/build/CMakeFiles /Users/soimarcelo/projects/ccbench/fair_determinism/build//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles /Users/soimarcelo/projects/ccbench/fair_determinism/logging/build//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/soimarcelo/projects/ccbench/fair_determinism/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -117,41 +117,78 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named ss2pl.exe
+# Target rules for targets named manager_test
 
 # Build rule for target.
-ss2pl.exe: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ss2pl.exe
-.PHONY : ss2pl.exe
+manager_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 manager_test
+.PHONY : manager_test
 
 # fast build rule for target.
-ss2pl.exe/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ss2pl.exe.dir/build.make CMakeFiles/ss2pl.exe.dir/build
-.PHONY : ss2pl.exe/fast
+manager_test/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/build
+.PHONY : manager_test/fast
 
-ss2pl.o: ss2pl.cc.o
-.PHONY : ss2pl.o
+#=============================================================================
+# Target rules for targets named optimizer_test
+
+# Build rule for target.
+optimizer_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 optimizer_test
+.PHONY : optimizer_test
+
+# fast build rule for target.
+optimizer_test/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test.dir/build.make CMakeFiles/optimizer_test.dir/build
+.PHONY : optimizer_test/fast
+
+tests/manager_test.o: tests/manager_test.cc.o
+.PHONY : tests/manager_test.o
 
 # target to build an object file
-ss2pl.cc.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ss2pl.exe.dir/build.make CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o
-.PHONY : ss2pl.cc.o
+tests/manager_test.cc.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/tests/manager_test.cc.o
+.PHONY : tests/manager_test.cc.o
 
-ss2pl.i: ss2pl.cc.i
-.PHONY : ss2pl.i
+tests/manager_test.i: tests/manager_test.cc.i
+.PHONY : tests/manager_test.i
 
 # target to preprocess a source file
-ss2pl.cc.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ss2pl.exe.dir/build.make CMakeFiles/ss2pl.exe.dir/ss2pl.cc.i
-.PHONY : ss2pl.cc.i
+tests/manager_test.cc.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/tests/manager_test.cc.i
+.PHONY : tests/manager_test.cc.i
 
-ss2pl.s: ss2pl.cc.s
-.PHONY : ss2pl.s
+tests/manager_test.s: tests/manager_test.cc.s
+.PHONY : tests/manager_test.s
 
 # target to generate assembly for a file
-ss2pl.cc.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ss2pl.exe.dir/build.make CMakeFiles/ss2pl.exe.dir/ss2pl.cc.s
-.PHONY : ss2pl.cc.s
+tests/manager_test.cc.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/tests/manager_test.cc.s
+.PHONY : tests/manager_test.cc.s
+
+tests/optimizer_test.o: tests/optimizer_test.cc.o
+.PHONY : tests/optimizer_test.o
+
+# target to build an object file
+tests/optimizer_test.cc.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test.dir/build.make CMakeFiles/optimizer_test.dir/tests/optimizer_test.cc.o
+.PHONY : tests/optimizer_test.cc.o
+
+tests/optimizer_test.i: tests/optimizer_test.cc.i
+.PHONY : tests/optimizer_test.i
+
+# target to preprocess a source file
+tests/optimizer_test.cc.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test.dir/build.make CMakeFiles/optimizer_test.dir/tests/optimizer_test.cc.i
+.PHONY : tests/optimizer_test.cc.i
+
+tests/optimizer_test.s: tests/optimizer_test.cc.s
+.PHONY : tests/optimizer_test.s
+
+# target to generate assembly for a file
+tests/optimizer_test.cc.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test.dir/build.make CMakeFiles/optimizer_test.dir/tests/optimizer_test.cc.s
+.PHONY : tests/optimizer_test.cc.s
 
 # Help Target
 help:
@@ -161,10 +198,14 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... ss2pl.exe"
-	@echo "... ss2pl.o"
-	@echo "... ss2pl.i"
-	@echo "... ss2pl.s"
+	@echo "... manager_test"
+	@echo "... optimizer_test"
+	@echo "... tests/manager_test.o"
+	@echo "... tests/manager_test.i"
+	@echo "... tests/manager_test.s"
+	@echo "... tests/optimizer_test.o"
+	@echo "... tests/optimizer_test.i"
+	@echo "... tests/optimizer_test.s"
 .PHONY : help
 
 

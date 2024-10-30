@@ -1,1 +1,1 @@
-/usr/bin/c++     CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o  -o ss2pl.exe /usr/lib/x86_64-linux-gnu/libgflags.so -lpthread 
+/Library/Developer/CommandLineTools/usr/bin/c++  -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX14.4.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o -o ss2pl.exe  /opt/homebrew/lib/libgflags.dylib

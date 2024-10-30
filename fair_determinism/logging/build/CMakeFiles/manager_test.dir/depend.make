@@ -1,2 +1,2 @@
-# Empty dependencies file for ss2pl.exe.
+# Empty dependencies file for manager_test.
 # This may be replaced when dependencies are built.

@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/soimarcelo/projects/ccbench/fair_determinism/ss2pl.cc" "CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o" "gcc" "CMakeFiles/ss2pl.exe.dir/ss2pl.cc.o.d"
+  "/Users/soimarcelo/projects/ccbench/fair_determinism/logging/tests/optimizer_test.cc" "CMakeFiles/optimizer_test.dir/tests/optimizer_test.cc.o" "gcc" "CMakeFiles/optimizer_test.dir/tests/optimizer_test.cc.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

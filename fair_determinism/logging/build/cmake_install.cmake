@@ -1,4 +1,4 @@
-# Install script for directory: /Users/soimarcelo/projects/ccbench/fair_determinism
+# Install script for directory: /Users/soimarcelo/projects/ccbench/fair_determinism/logging
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -52,6 +52,6 @@ endif()
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-  file(WRITE "/Users/soimarcelo/projects/ccbench/fair_determinism/build/${CMAKE_INSTALL_MANIFEST}"
+  file(WRITE "/Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()
