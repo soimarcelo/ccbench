@@ -1,79 +1,63 @@
 // tests/optimizer_test.cc
-#include <cassert>
+#include "../include/log_optimizer.h"  // 最適化のテストなのでlog_optimizerをインクルード
+#include <vector>
 #include <iostream>
-#include <chrono>
-#include "../include/log_manager.h"
-#include "../include/log_optimizer.h"
+#include <iomanip>
 
-void TestMassiveDataSetOptimization() {
-    std::cout << "\n=== Testing Massive Dataset Optimization (1M records) ===" << std::endl;
-    
-    // 大規模テストデータの設定
-    const size_t NUM_RECORDS = 1000000;  // 100万レコード
-    const size_t NUM_KEYS = 10000;       // 1万種類のキー
-    
-    std::cout << "Generating " << NUM_RECORDS << " records..." << std::endl;
-    
-    // データ生成開始時間を記録
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    std::vector<LogRecord> massive_logs;
-    massive_logs.reserve(NUM_RECORDS);  // メモリを事前確保
+void printLogResults(const std::vector<LogRecord>& logs, bool is_small_dataset) {
+    std::cout << "\nTotal records: " << logs.size() << std::endl;
 
-    // テストデータの生成
-    for(size_t i = 0; i < NUM_RECORDS; i++) {
-        uint64_t key = i % NUM_KEYS;  // キーを循環させる
-        uint64_t value = i * 100;
-        Ope op = (i % 3 == 0) ? Ope::READ : Ope::WRITE;  // 33%がREAD操作
-        
-        massive_logs.push_back({
-            static_cast<uint64_t>(i),  // tx_id
-            key,
-            value,
-            op
-        });
+    if (is_small_dataset) {
+        // 小規模データの場合は全レコード表示
+        std::cout << "\n=== All Records ===" << std::endl;
+        for (const auto& log : logs) {
+            std::cout << "TX: " << std::setw(3) << log.tx_id 
+                      << ", Key: " << std::setw(3) << log.key 
+                      << ", Value: " << std::setw(5) << log.value
+                      << ", Op: " << (log.operation_type == Ope::READ ? "READ " : "WRITE")
+                      << std::endl;
+        }
+    }
+    std::cout << "===================" << std::endl;
+}
 
-        // 進捗表示（10万レコードごと）
-        if (i % 100000 == 0) {
-            std::cout << "Generated " << i << " records..." << std::endl;
+void runTest(size_t num_records, size_t num_keys, const std::string& test_name) {
+    bool is_small_dataset = (num_records <= 20);
+    std::cout << "\n=== " << test_name << " ===" << std::endl;
+    
+    // テストデータの作成
+    std::vector<LogRecord> logs;
+    for (size_t i = 0; i < num_records; i++) {
+        uint64_t key = i % num_keys;  // キーの繰り返し
+        logs.push_back({i, key, i*100, Ope::WRITE});
+        if (i % 2 == 0) {  // 50%の確率で読み込み
+            logs.push_back({i, key, i*100, Ope::READ});
         }
     }
 
-    auto generation_end = std::chrono::high_resolution_clock::now();
-    auto generation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        generation_end - start_time).count();
-    
-    std::cout << "Data generation completed in " << generation_time << "ms" << std::endl;
-    std::cout << "Total size: " << massive_logs.size() << " records" << std::endl;
+    std::cout << "\nOriginal logs:" << std::endl;
+    printLogResults(logs, is_small_dataset);
 
-    // 最適化の実行と時間計測
-    std::cout << "\nStarting optimization..." << std::endl;
+    // 最適化の実行
     LogOptimizer optimizer;
-    auto optimize_start = std::chrono::high_resolution_clock::now();
-    
-    auto optimized = optimizer.OptimizeLogs(massive_logs);
-    
-    auto optimize_end = std::chrono::high_resolution_clock::now();
-    auto optimization_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        optimize_end - optimize_start).count();
+    auto optimized_logs = optimizer.OptimizeLogs(logs);
 
-    // 結果の表示
-    std::cout << "\nOptimization Results:" << std::endl;
-    std::cout << "Original log size: " << massive_logs.size() << std::endl;
-    std::cout << "Optimized log size: " << optimized.size() << std::endl;
-    std::cout << "Optimization rate: " 
-              << (1.0 - static_cast<double>(optimized.size()) / massive_logs.size()) * 100 
-              << "%" << std::endl;
-    std::cout << "Optimization time: " << optimization_time << "ms" << std::endl;
-    
-    // キーの分布の確認（最初の10件だけ表示）
-    std::cout << "\nFirst 10 optimized records:" << std::endl;
-    for(size_t i = 0; i < std::min(size_t(10), optimized.size()); i++) {
-        optimized[i].Print();
-    }
+    std::cout << "\nAfter optimization:" << std::endl;
+    printLogResults(optimized_logs, is_small_dataset);
+
+    // 削減率を計算
+    double reduction_rate = 100.0 * 
+        (1.0 - static_cast<double>(optimized_logs.size()) / logs.size());
+    std::cout << "Reduction rate: " << std::fixed << std::setprecision(2) 
+              << reduction_rate << "%" << std::endl;
 }
 
 int main() {
-    TestMassiveDataSetOptimization();
+    // 小規模テスト（全レコード表示）
+    runTest(10, 2, "Small Test (10 records, 2 keys)");
+    
+    // 大規模テスト
+    runTest(1000000, 1000, "Large Test (1M records, 1000 keys)");
+
     return 0;
 }

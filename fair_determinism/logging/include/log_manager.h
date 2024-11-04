@@ -2,43 +2,47 @@
 #pragma once
 #include <vector>
 #include <fstream>
-#include <iostream>
-#include <chrono>
+#include "common_types.h"
 
-// ss2pl.ccからOpeだけを抽出
-enum class Ope {
-    READ,
-    WRITE,
-    SLEEP
-};
-
-struct LogRecord {
-    uint64_t tx_id;
-    uint64_t key;
-    uint64_t value;
-    Ope operation_type;
-
-    void Print() const {
-        std::cout << "TX: " << tx_id 
-                  << ", Key: " << key 
-                  << ", Value: " << value 
-                  << ", Op: " << (operation_type == Ope::READ ? "READ" : "WRITE")
-                  << std::endl;
-    }
-};
-
+/**
+ * LogManager: トランザクションログの記録と管理を行うクラス
+ * - ログをメモリ上のバッファに保持
+ * - ストレージへの書き込み機能を提供
+ */
 class LogManager {
+private:
+    std::vector<LogRecord> log_buffer_;     // メモリ上のログバッファ
+    std::string file_path_;                 // ストレージファイルのパス
+    std::ofstream storage_file_;            // ストレージファイルのハンドル
 
 public:
-    LogManager(const std::string& file_path = "storage.log") 
+    // コンストラクタ: ストレージファイルをオープン
+    explicit LogManager(const std::string& file_path = "storage.log") 
         : file_path_(file_path) {
         storage_file_.open(file_path_, std::ios::app);
     }
 
+    // ログレコードをバッファに追加
     void AppendLog(const LogRecord& record) {
         log_buffer_.push_back(record);
     }
 
+    // 最適化済みログでバッファを更新
+    void UpdateLogs(const std::vector<LogRecord>& new_logs) {
+        log_buffer_ = new_logs;
+    }
+
+    // 現在のログ数を取得
+    size_t GetLogSize() const {
+        return log_buffer_.size();
+    }
+
+    // 現在のログバッファを取得
+    const std::vector<LogRecord>& GetLogs() const {
+        return log_buffer_;
+    }
+
+    // バッファの内容をストレージに書き込み
     void FlushToStorage() {
         for (const auto& record : log_buffer_) {
             storage_file_ << record.tx_id << ","
@@ -47,19 +51,6 @@ public:
                          << static_cast<int>(record.operation_type) << "\n";
         }
         storage_file_.flush();
-        log_buffer_.clear();
+        log_buffer_.clear();  // バッファをクリア
     }
-
-    size_t GetLogSize() const {
-        return log_buffer_.size();
-    }
-
-    const std::vector<LogRecord>& GetLogs() const {
-        return log_buffer_;
-    }
-
-private:
-    std::vector<LogRecord> log_buffer_;
-    std::string file_path_;
-    std::ofstream storage_file_;
 };

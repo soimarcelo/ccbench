@@ -1,45 +1,37 @@
 // include/log_optimizer.h
 #pragma once
+#include <vector>
 #include <map>
-#include "log_manager.h"  // LogRecordとOpeの定義を使用
+#include "common_types.h"
 
+/**
+ * LogOptimizer: ログの最適化を行うクラス
+ * - 各キーの最後の書き込み操作のみを保持
+ * - 読み取り操作は最適化の対象外
+ */
 class LogOptimizer {
 public:
-    // 最適化関数
+    // ログの最適化を実行
+    // @param logs 最適化対象のログレコード群
+    // @return 最適化後のログレコード群
     std::vector<LogRecord> OptimizeLogs(const std::vector<LogRecord>& logs) {
-        std::map<uint64_t, LogRecord> last_writes;  // キーごとの最後の書き込み
+        // キーごとに最後の書き込み操作を保持
+        std::map<uint64_t, LogRecord> last_writes;
         
-        // 全ログをスキャンして各キーの最後の書き込みを記録
-        for (const auto& record : logs) {
-            if (record.operation_type == Ope::WRITE) {
-                last_writes[record.key] = record;
+        // 全ログをスキャンし、書き込み操作のみを対象に最適化
+        for (const auto& log : logs) {
+            if (log.operation_type == Ope::WRITE) {
+                last_writes[log.key] = log;  // 同じキーの場合は上書き
             }
         }
         
         // 最適化されたログの生成
-        std::vector<LogRecord> optimized_logs;
+        // mapから最終的な書き込み操作のみを取り出す
+        std::vector<LogRecord> optimized;
         for (const auto& [key, record] : last_writes) {
-            optimized_logs.push_back(record);
+            optimized.push_back(record);
         }
         
-        return optimized_logs;
-    }
-
-    // デバッグ用の出力関数
-    void PrintOptimizationResult(const std::vector<LogRecord>& original,
-                                const std::vector<LogRecord>& optimized) {
-        std::cout << "\n=== Optimization Results ===" << std::endl;
-        std::cout << "Original logs: " << original.size() << " records" << std::endl;
-        std::cout << "Optimized logs: " << optimized.size() << " records" << std::endl;
-        
-        std::cout << "\nOriginal logs:" << std::endl;
-        for (const auto& record : original) {
-            record.Print();
-        }
-        
-        std::cout << "\nOptimized logs:" << std::endl;
-        for (const auto& record : optimized) {
-            record.Print();
-        }
+        return optimized;
     }
 };

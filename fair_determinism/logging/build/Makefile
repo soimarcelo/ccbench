@@ -117,19 +117,6 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named manager_test
-
-# Build rule for target.
-manager_test: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 manager_test
-.PHONY : manager_test
-
-# fast build rule for target.
-manager_test/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/build
-.PHONY : manager_test/fast
-
-#=============================================================================
 # Target rules for targets named optimizer_test
 
 # Build rule for target.
@@ -141,30 +128,6 @@ optimizer_test: cmake_check_build_system
 optimizer_test/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test.dir/build.make CMakeFiles/optimizer_test.dir/build
 .PHONY : optimizer_test/fast
-
-tests/manager_test.o: tests/manager_test.cc.o
-.PHONY : tests/manager_test.o
-
-# target to build an object file
-tests/manager_test.cc.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/tests/manager_test.cc.o
-.PHONY : tests/manager_test.cc.o
-
-tests/manager_test.i: tests/manager_test.cc.i
-.PHONY : tests/manager_test.i
-
-# target to preprocess a source file
-tests/manager_test.cc.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/tests/manager_test.cc.i
-.PHONY : tests/manager_test.cc.i
-
-tests/manager_test.s: tests/manager_test.cc.s
-.PHONY : tests/manager_test.s
-
-# target to generate assembly for a file
-tests/manager_test.cc.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/manager_test.dir/build.make CMakeFiles/manager_test.dir/tests/manager_test.cc.s
-.PHONY : tests/manager_test.cc.s
 
 tests/optimizer_test.o: tests/optimizer_test.cc.o
 .PHONY : tests/optimizer_test.o
@@ -198,11 +161,7 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... manager_test"
 	@echo "... optimizer_test"
-	@echo "... tests/manager_test.o"
-	@echo "... tests/manager_test.i"
-	@echo "... tests/manager_test.s"
 	@echo "... tests/optimizer_test.o"
 	@echo "... tests/optimizer_test.i"
 	@echo "... tests/optimizer_test.s"
