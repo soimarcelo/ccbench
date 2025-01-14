@@ -1,65 +1,56 @@
-// tests/logging_system_test.cc
-#include <cassert>
 #include <iostream>
+#include <vector>
+#include <iomanip>
 #include "../include/logging_system.h"
+#include "../include/log_optimizer.h"
+#include "../include/common_types.h"
+// トランザクション生成関数
+void generate_transactions(LoggingSystem& system, int num_transactions, double rw_ratio) {
+    for (int i = 0; i < num_transactions; ++i) {
+        uint64_t tx_id = i;
+        uint64_t key = i % 100; // キーは0-99で循環
+        uint64_t value = 123;   // ダミーの値
+        Ope operation_type = (i < num_transactions * rw_ratio) ? Ope::WRITE : Ope::READ;
 
-void PrintTestHeader(const std::string& test_name) {
-    std::cout << "\n=== Starting Test: " << test_name << " ===" << std::endl;
-}
+        // トランザクションログを作成
+        LogRecord record{tx_id, key, value, operation_type};
 
-void PrintTestFooter(const std::string& test_name) {
-    std::cout << "=== Test Completed: " << test_name << " ===" << std::endl;
-}
-
-// 基本的な操作のテスト
-void TestBasicOperations() {
-    PrintTestHeader("Basic Operations");
-    
-    LoggingSystem system;
-    
-    // 基本的なログ記録のテスト
-    LogRecord record1{1, 100, 1000, Ope::WRITE};
-    LogRecord record2{1, 200, 2000, Ope::READ};
-    
-    std::cout << "Adding logs..." << std::endl;
-    system.ProcessTransaction(record1);
-    system.ProcessTransaction(record2);
-    
-    auto logs = system.GetCurrentLogs();
-    std::cout << "Current log count: " << logs.size() << std::endl;
-    
-    system.DumpStatus();
-    
-    PrintTestFooter("Basic Operations");
-}
-
-// バッチ処理のテスト
-void TestBatchProcessing() {
-    PrintTestHeader("Batch Processing");
-    
-    LoggingSystem system;
-    
-    // バッチサイズまでログを追加
-    std::cout << "Adding logs up to batch size..." << std::endl;
-    for(uint64_t i = 0; i < 1000; i++) {
-        LogRecord record{i, i % 100, i * 100, Ope::WRITE};
+        // ログシステムに追加
         system.ProcessTransaction(record);
     }
-    
-    auto logs = system.GetCurrentLogs();
-    std::cout << "Final log count: " << logs.size() << std::endl;
-    
-    system.DumpStatus();
-    
-    PrintTestFooter("Batch Processing");
+}
+
+void run_rw_ratio_test(int num_transactions, double step = 0.1) {
+    std::cout << std::setw(10) << "RW Ratio" << std::setw(20) << "Reduction Rate (%)" << "\n";
+    std::cout << "------------------------------------------\n";
+
+    for (double rw_ratio = 0.0; rw_ratio <= 1.0; rw_ratio += step) {
+        // LoggingSystem と LogOptimizer の初期化
+        LoggingSystem logging_system;
+        LogOptimizer optimizer;
+
+        // トランザクションを生成してシステムに追加
+        generate_transactions(logging_system, num_transactions, rw_ratio);
+
+        // ログの取得と最適化
+        auto original_logs = logging_system.GetCurrentLogs();
+        auto optimized_logs = optimizer.OptimizeLogs(original_logs);
+
+        // 削減率の計算
+        double original_size = original_logs.size();
+        double optimized_size = optimized_logs.size();
+        double reduction_rate = (1.0 - optimized_size / original_size) * 100.0;
+
+        // 結果を出力
+        std::cout << std::fixed << std::setprecision(2);
+        std::cout << std::setw(10) << rw_ratio << std::setw(20) << reduction_rate << "\n";
+    }
 }
 
 int main() {
-    std::cout << "Starting LoggingSystem tests..." << std::endl;
-    
-    TestBasicOperations();
-    TestBatchProcessing();
-    
-    std::cout << "\nAll tests completed successfully!" << std::endl;
+    // テスト実行
+    int num_transactions = 1000; // 生成するトランザクション数
+    run_rw_ratio_test(num_transactions);
+
     return 0;
 }

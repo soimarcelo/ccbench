@@ -1,0 +1,3 @@
+/Users/soimarcelo/projects/ccbench/fair_determinism/logging/CMakeFiles/ss2pl.exe.dir
+/Users/soimarcelo/projects/ccbench/fair_determinism/logging/CMakeFiles/edit_cache.dir
+/Users/soimarcelo/projects/ccbench/fair_determinism/logging/CMakeFiles/rebuild_cache.dir

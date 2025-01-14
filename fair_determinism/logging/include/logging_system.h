@@ -22,11 +22,11 @@ private:
 
     // デバッグ用の出力レベル
     void PrintDebug(const std::string& message) const {
-        std::cout << "[DEBUG] LoggingSystem: " << message << std::endl;
+        // std::cout << "[DEBUG] LoggingSystem: " << message << std::endl;
     }
 
     void PrintInfo(const std::string& message) const {
-        std::cout << "[INFO] LoggingSystem: " << message << std::endl;
+        // std::cout << "[INFO] LoggingSystem: " << message << std::endl;
     }
 
     void PrintStatus() const {
@@ -44,13 +44,13 @@ public:
 
     // トランザクションログの処理
     void ProcessTransaction(const LogRecord& record) {
-        PrintDebug("Processing transaction " + std::to_string(record.tx_id));
+        // PrintDebug("Processing transaction " + std::to_string(record.tx_id));
         
         // ログの追加
         manager_.AppendLog(record);
         batch_count_++;
 
-        PrintDebug("Current batch count: " + std::to_string(batch_count_));
+        // PrintDebug("Current batch count: " + std::to_string(batch_count_));
         
         // バッチサイズに達したら最適化を実行
         if (batch_count_ >= BATCH_SIZE) {

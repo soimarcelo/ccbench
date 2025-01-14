@@ -117,6 +117,19 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+# Target rules for targets named experiment1_test
+
+# Build rule for target.
+experiment1_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 experiment1_test
+.PHONY : experiment1_test
+
+# fast build rule for target.
+experiment1_test/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment1_test.dir/build.make CMakeFiles/experiment1_test.dir/build
+.PHONY : experiment1_test/fast
+
+#=============================================================================
 # Target rules for targets named optimizer_test
 
 # Build rule for target.
@@ -128,6 +141,80 @@ optimizer_test: cmake_check_build_system
 optimizer_test/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test.dir/build.make CMakeFiles/optimizer_test.dir/build
 .PHONY : optimizer_test/fast
+
+#=============================================================================
+# Target rules for targets named optimizer_test_large
+
+# Build rule for target.
+optimizer_test_large: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 optimizer_test_large
+.PHONY : optimizer_test_large
+
+# fast build rule for target.
+optimizer_test_large/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test_large.dir/build.make CMakeFiles/optimizer_test_large.dir/build
+.PHONY : optimizer_test_large/fast
+
+#=============================================================================
+# Target rules for targets named experiment2_test
+
+# Build rule for target.
+experiment2_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 experiment2_test
+.PHONY : experiment2_test
+
+# fast build rule for target.
+experiment2_test/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment2_test.dir/build.make CMakeFiles/experiment2_test.dir/build
+.PHONY : experiment2_test/fast
+
+tests/experiment1_test.o: tests/experiment1_test.cc.o
+.PHONY : tests/experiment1_test.o
+
+# target to build an object file
+tests/experiment1_test.cc.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment1_test.dir/build.make CMakeFiles/experiment1_test.dir/tests/experiment1_test.cc.o
+.PHONY : tests/experiment1_test.cc.o
+
+tests/experiment1_test.i: tests/experiment1_test.cc.i
+.PHONY : tests/experiment1_test.i
+
+# target to preprocess a source file
+tests/experiment1_test.cc.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment1_test.dir/build.make CMakeFiles/experiment1_test.dir/tests/experiment1_test.cc.i
+.PHONY : tests/experiment1_test.cc.i
+
+tests/experiment1_test.s: tests/experiment1_test.cc.s
+.PHONY : tests/experiment1_test.s
+
+# target to generate assembly for a file
+tests/experiment1_test.cc.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment1_test.dir/build.make CMakeFiles/experiment1_test.dir/tests/experiment1_test.cc.s
+.PHONY : tests/experiment1_test.cc.s
+
+tests/experiment2_test.o: tests/experiment2_test.cc.o
+.PHONY : tests/experiment2_test.o
+
+# target to build an object file
+tests/experiment2_test.cc.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment2_test.dir/build.make CMakeFiles/experiment2_test.dir/tests/experiment2_test.cc.o
+.PHONY : tests/experiment2_test.cc.o
+
+tests/experiment2_test.i: tests/experiment2_test.cc.i
+.PHONY : tests/experiment2_test.i
+
+# target to preprocess a source file
+tests/experiment2_test.cc.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment2_test.dir/build.make CMakeFiles/experiment2_test.dir/tests/experiment2_test.cc.i
+.PHONY : tests/experiment2_test.cc.i
+
+tests/experiment2_test.s: tests/experiment2_test.cc.s
+.PHONY : tests/experiment2_test.s
+
+# target to generate assembly for a file
+tests/experiment2_test.cc.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/experiment2_test.dir/build.make CMakeFiles/experiment2_test.dir/tests/experiment2_test.cc.s
+.PHONY : tests/experiment2_test.cc.s
 
 tests/optimizer_test.o: tests/optimizer_test.cc.o
 .PHONY : tests/optimizer_test.o
@@ -153,6 +240,30 @@ tests/optimizer_test.cc.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test.dir/build.make CMakeFiles/optimizer_test.dir/tests/optimizer_test.cc.s
 .PHONY : tests/optimizer_test.cc.s
 
+tests/optimizer_test_large.o: tests/optimizer_test_large.cc.o
+.PHONY : tests/optimizer_test_large.o
+
+# target to build an object file
+tests/optimizer_test_large.cc.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test_large.dir/build.make CMakeFiles/optimizer_test_large.dir/tests/optimizer_test_large.cc.o
+.PHONY : tests/optimizer_test_large.cc.o
+
+tests/optimizer_test_large.i: tests/optimizer_test_large.cc.i
+.PHONY : tests/optimizer_test_large.i
+
+# target to preprocess a source file
+tests/optimizer_test_large.cc.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test_large.dir/build.make CMakeFiles/optimizer_test_large.dir/tests/optimizer_test_large.cc.i
+.PHONY : tests/optimizer_test_large.cc.i
+
+tests/optimizer_test_large.s: tests/optimizer_test_large.cc.s
+.PHONY : tests/optimizer_test_large.s
+
+# target to generate assembly for a file
+tests/optimizer_test_large.cc.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optimizer_test_large.dir/build.make CMakeFiles/optimizer_test_large.dir/tests/optimizer_test_large.cc.s
+.PHONY : tests/optimizer_test_large.cc.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -161,10 +272,22 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... experiment1_test"
+	@echo "... experiment2_test"
 	@echo "... optimizer_test"
+	@echo "... optimizer_test_large"
+	@echo "... tests/experiment1_test.o"
+	@echo "... tests/experiment1_test.i"
+	@echo "... tests/experiment1_test.s"
+	@echo "... tests/experiment2_test.o"
+	@echo "... tests/experiment2_test.i"
+	@echo "... tests/experiment2_test.s"
 	@echo "... tests/optimizer_test.o"
 	@echo "... tests/optimizer_test.i"
 	@echo "... tests/optimizer_test.s"
+	@echo "... tests/optimizer_test_large.o"
+	@echo "... tests/optimizer_test_large.i"
+	@echo "... tests/optimizer_test_large.s"
 .PHONY : help
 
 

@@ -1,3 +1,6 @@
+/Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles/experiment1_test.dir
 /Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles/optimizer_test.dir
+/Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles/optimizer_test_large.dir
+/Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles/experiment2_test.dir
 /Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles/edit_cache.dir
 /Users/soimarcelo/projects/ccbench/fair_determinism/logging/build/CMakeFiles/rebuild_cache.dir
